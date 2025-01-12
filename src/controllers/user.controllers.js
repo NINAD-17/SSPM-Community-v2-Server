@@ -2,6 +2,7 @@ import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
@@ -179,4 +180,36 @@ const updateProfile = asyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, userLogin, updateProfile };
+const updateAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.file?.path;
+
+    if(!avatarLocalPath) {
+        throw new ApiError(400, "No avatar image uploaded!");
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    if(!avatar) {
+        throw new ApiError(400, "Error while uploading avatar!");
+    }
+
+    const user = await findByIdAndUpdate(
+        req.user?._id,
+        { 
+            $set: {
+                avatar: avatar.url
+            }
+         },
+        { new: true }
+    ).select("-password -refreshToken");
+
+    if(!user) {
+        throw new ApiError(404, "User not found!");
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, { user }, "Avatar updated successfully!")
+    );
+});
+
+export { registerUser, userLogin, updateProfile, updateAvatar };
