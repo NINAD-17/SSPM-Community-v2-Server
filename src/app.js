@@ -22,6 +22,13 @@ app.use(express.static("public"));
 app.use(cookieParser());
 
 // Routes
-app.use("/api/v2/users");
+import userRoutes from "./routes/user.routes.js";
+import connectionRoutes from "./routes/connection.routes.js";
+import followerRoutes from "./routes/follower.routes.js";
+
+// Routes Declaration
+app.use("/api/v2/users", userRoutes);
+app.use("/api/v2/connections", connectionRoutes);
+app.use("/api/v2/followers", followerRoutes);
 
 export default app;
