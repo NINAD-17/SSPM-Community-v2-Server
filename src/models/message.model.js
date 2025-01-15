@@ -27,8 +27,14 @@ const messageSchema = new Schema(
                 },
             },
         ],
+        deletedAt: {
+            type: Date,
+            default: null
+        }
     },
     { timestamps: true }
 );
+
+messageSchema.index({ conversation: 1, createdAt: -1 });
 
 export const Message = mongoose.model("Message", messageSchema);
