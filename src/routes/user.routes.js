@@ -2,6 +2,7 @@ import { Router } from "express";
 import { registerUser, updateAvatar, updateProfile, userLogin } from "../controllers/user.controllers.js";
 import { validateAndSanitizeInput } from "../middlewares/validation.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import getMulterMiddleware from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
@@ -11,7 +12,11 @@ router.route("/login").post(userLogin);
 
 // Profile Updates
 router.route("/user-profile").patch(verifyJWT, validateAndSanitizeInput, updateProfile);
-router.route("/update-avatar").patch(verifyJWT, updateAvatar);
+
+// Multer middleware for avatar upload
+const avatarMulterOptions = { singleName: "avatar" };
+const avatarUpload = getMulterMiddleware(avatarMulterOptions);
+router.route("/update-avatar").patch(verifyJWT, avatarUpload, updateAvatar);
 
 
 export default router;
