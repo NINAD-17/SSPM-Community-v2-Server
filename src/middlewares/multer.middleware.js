@@ -1,6 +1,6 @@
 import multer from "multer";
 
-const getMulterMiddleware = (options) => {
+const getMulterMiddleware = (options = {}) => {
     const storage = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, options.destination || "./public/temp");
@@ -13,38 +13,60 @@ const getMulterMiddleware = (options) => {
     });
 
     const fileFilter = (req, file, cb) => {
-        if(!options.allowedTypes) return cb(null, true); // accept the file (all file types are allowed)
+        if (!options.allowedTypes) return cb(null, true);
 
         const allowedTypes = options.allowedTypes;
-
-        if(allowedTypes.includes(file.mimeType)) {
-            cb(null, true); // accept the file
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
         } else {
             cb(
-                new Error(
-                    "Invalid file type. Only specific types are allowed."
-                )
+                new Error("Invalid file type. Only specific types are allowed.")
             );
         }
-    }
+    };
 
     const upload = multer({
         storage,
         fileFilter,
         limits: {
-            fileSize: options.fileSizeLimit || 50 * 1024 * 1024, // default is 50 MB
-        }
-    })
+            fileSize: options.fileSizeLimit || 50 * 1024 * 1024,
+        },
+    });
 
-    if(options.fields) {
-        return upload.fields(options.fields);
+    let multerMiddleware;
+    if (options.fields) {
+        multerMiddleware = upload.fields(options.fields);
     } else if (options.arrayName) {
-        return upload.array(options.arrayName, options.maxCount || 5);
-    } else if(options.singleName) {
-        return upload.single(options.singleName);
+        multerMiddleware = upload.array(
+            options.arrayName,
+            options.maxCount || 5
+        );
+    } else if (options.singleName) {
+        multerMiddleware = upload.single(options.singleName);
     } else {
-        return upload;
+        multerMiddleware = upload.fields([{ name: "media", maxCount: 5 }]);
     }
+
+    return (req, res, next) => {
+        multerMiddleware(req, res, (err) => {
+            if (err) {
+                return next(err);
+            }
+
+            const totalFiles = req.files
+                ? Object.values(req.files).reduce(
+                      (total, field) => total + field.length,
+                      0
+                  )
+                : 0;
+
+            if (totalFiles > (options.maxCount || 5)) {
+                return next(new Error("Exceeded maximum number of files."));
+            }
+
+            next();
+        });
+    };
 };
 
 export default getMulterMiddleware;
