@@ -29,3 +29,22 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
         throw new ApiError(401, error?.message || "Invalid access token");
     }
 });
+
+export const isAdmin = asyncHandler(async(req, _, next) => {
+    if(!req.user) {
+        throw new ApiError(401, "Access Denied!");
+    }
+
+    try {
+        // const user = await User.findById(req.user._id);
+        const user = req.user; // As the req.user already contain isAdmin we're not calling db again to fetch user.
+
+        if(!user || !user.isAdmin) {
+            throw new ApiError(403, "Access Denied! Admin Only!");
+        }
+
+        next();
+    } catch(error) {
+        throw new ApiError(401, "Unauthorized Request!");
+    }
+})
