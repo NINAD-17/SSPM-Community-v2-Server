@@ -1,6 +1,6 @@
 import { ApiError } from "../utils/apiError";
 import { updateUserSchema } from "../validators/user.validators.js";
-import { createUserPostSchema } from "../validators/userPost.validators.js";
+import { createUserPostSchema, updateUserPostSchema } from "../validators/userPost.validators.js";
 import xss from "xss";
 import sanitizeHtml from "sanitize-html";
 
@@ -44,9 +44,11 @@ export const validateAndSanitizePost = (req, res, next) => {
             },
         });
     } 
+
+    const schema = req.method === "POST" ? createUserPostSchema : updateUserPostSchema;
     
     // Validate input
-    const { error } = createUserPostSchema.validate(sanitizedBody, {
+    const { error } = schema.validate(sanitizedBody, {
         abortEarly: false,
         allowUnknown: true,
     });

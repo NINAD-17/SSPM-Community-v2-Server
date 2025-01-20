@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
-import { createPost, uploadMedia } from "../controllers/userPost.controllers.js";
+import {
+    createPost,
+    updatePost,
+    uploadMedia,
+} from "../controllers/userPost.controllers.js";
 import { validateAndSanitizePost } from "../middlewares/validation.middleware.js";
 
 const router = new Router();
@@ -21,6 +25,12 @@ const uploadPostMediaOptions = {
 };
 
 router.route("/create").post(verifyJWT, validateAndSanitizePost, createPost);
-router.route("/upload-media").post(verifyJWT,getMulterMiddleware(uploadPostMediaOptions), uploadMedia);
+router
+    .route("/upload-media")
+    .post(verifyJWT, getMulterMiddleware(uploadPostMediaOptions), uploadMedia);
+router
+    .route("/:postId")
+    .patch(verifyJWT, validateAndSanitizePost, updatePost)
+    .delete(verifyJWT, deletePost);
 
 export default router;

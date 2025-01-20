@@ -45,6 +45,48 @@ const uploadMedia = asyncHandler(async(req, res) => {
     req.status(200).json(
         new ApiResponse(200, mediaUrls, "Media uploaded successfully!")
     )
-})
+});
 
-export { createPost, uploadMedia };
+const updatePost = asyncHandler(async (req, res) => {
+    const { postId } = req.params;
+    const { content } = req.body;
+
+    try {
+        const post = await UserPost.findById(postId);
+    
+        if(post.userId.toString() !== req.user._id.toString()) {
+            throw new ApiError(403, "Unauthorized to update this post.");
+        }
+    
+        post.content = content;
+        await post.save();
+    
+        res.status(200).json(
+            new ApiResponse(200, post, "Post updated successfully!")
+        );
+    } catch (error) {
+        throw new ApiError(500, "Failed to update post.");
+    }
+});
+
+const deletePost = asyncHandler(async (req, res) => {
+    const { postId } = req.params;
+
+    try {
+        const post = await UserPost.findById(postId);
+
+        if(post.userId.toString() !== req.user._id.toString()) {
+            throw new ApiError(403, "Unauthorized to delete this post.");
+        }
+
+        await post.remove();
+
+        res.status(200).json(
+            new ApiResponse(200, null, "Post deleted successfully!")
+        );
+    } catch(error) {
+        throw new ApiError(500, "Failed to delete post.");
+    }
+});
+
+export { createPost, uploadMedia, updatePost, deletePost };

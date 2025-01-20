@@ -9,13 +9,7 @@ const objectId = (value, helpers) => {
     return value;
 };
 
-const createUserPostSchema = Joi.object({
-    userId: Joi.string().custom(objectId).required().messages({
-        "string.base": "User ID should be a type of text.",
-        "string.empty": "User ID cannot be an empty field.",
-        "any.required": "User ID is a required field.",
-        "any.custom": "Invalid ObjectId format.",
-    }),
+const baseUserPostSchema = Joi.object({
     content: Joi.string().trim().min(1).required().messages({
         "string.base": "Content should be a type of text.",
         "string.empty": "Content cannot be an empty field.",
@@ -29,4 +23,15 @@ const createUserPostSchema = Joi.object({
     }),
 });
 
-export { createUserPostSchema };
+const createUserPostSchema = baseUserPostSchema.keys({
+    userId: Joi.string().custom(objectId).required().messages({
+        "string.base": "User ID should be a type of text.",
+        "string.empty": "User ID cannot be an empty field.",
+        "any.required": "User ID is a required field.",
+        "any.custom": "Invalid ObjectId format.",
+    }),
+});
+
+const updateUserPostSchema = baseUserPostSchema;
+
+export { createUserPostSchema, updateUserPostSchema };
