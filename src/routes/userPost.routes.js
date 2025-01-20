@@ -3,6 +3,8 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
 import {
     createPost,
+    getUserPost,
+    getUserPosts,
     updatePost,
     uploadMedia,
 } from "../controllers/userPost.controllers.js";
@@ -30,7 +32,10 @@ router
     .post(verifyJWT, getMulterMiddleware(uploadPostMediaOptions), uploadMedia);
 router
     .route("/:postId")
+    .get(verifyJWT, getUserPost)
     .patch(verifyJWT, validateAndSanitizePost, updatePost)
     .delete(verifyJWT, deletePost);
+
+router.route("/:userId").get(verifyJWT, getUserPosts);
 
 export default router;
