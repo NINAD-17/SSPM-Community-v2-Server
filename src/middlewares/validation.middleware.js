@@ -33,36 +33,36 @@ export const validateAndSanitizeInput = (schema) => {
     };
 };
 
-export const validateAndSanitizePost = (req, res, next) => {
-    const sanitizedBody = { ...req.body };
+// export const validateAndSanitizePost = (req, res, next) => {
+//     const sanitizedBody = { ...req.body };
 
-    if (sanitizedBody.content) {
-        sanitizedBody.content = sanitizeHtml(sanitizedBody.content, {
-            allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
-            allowedAttributes: {
-                "*": ["style", "class"],
-                a: ["href", "name", "target"],
-                img: ["src"],
-            },
-        });
-    } 
+//     if (sanitizedBody.content) {
+//         sanitizedBody.content = sanitizeHtml(sanitizedBody.content, {
+//             allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
+//             allowedAttributes: {
+//                 "*": ["style", "class"],
+//                 a: ["href", "name", "target"],
+//                 img: ["src"],
+//             },
+//         });
+//     } 
 
-    const schema = req.method === "POST" ? createUserPostSchema : updateUserPostSchema;
+//     const schema = req.method === "POST" ? createUserPostSchema : updateUserPostSchema;
     
-    // Validate input
-    const { error } = schema.validate(sanitizedBody, {
-        abortEarly: false,
-        allowUnknown: true,
-    });
+//     // Validate input
+//     const { error } = schema.validate(sanitizedBody, {
+//         abortEarly: false,
+//         allowUnknown: true,
+//     });
 
-    if (error) {
-        const validationErrors = error.details.map((detail) => ({
-            message: detail.message,
-            path: detail.path,
-        }));
-        throw new ApiError(400, "Invalid input", validationErrors);
-    }
+//     if (error) {
+//         const validationErrors = error.details.map((detail) => ({
+//             message: detail.message,
+//             path: detail.path,
+//         }));
+//         throw new ApiError(400, "Invalid input", validationErrors);
+//     }
 
-    req.body = sanitizedBody;
-    next();
-};
+//     req.body = sanitizedBody;
+//     next();
+// };

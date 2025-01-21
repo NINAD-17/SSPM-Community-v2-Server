@@ -5,15 +5,15 @@ import {
     reviewReport,
 } from "../controllers/report.controllers.js";
 import { verifyJWT, isAdmin } from "../middlewares/auth.middleware.js";
-import { validateAndSanitizeInput } from "../middlewares/validateAndSanitizeInput.js";
-import { reportPostSchema } from "../validators/reportPost.validators.js";
+// import { validateAndSanitizeInput } from "../middlewares/validateAndSanitizeInput.js";
+// import { reportPostSchema } from "../validators/reportPost.validators.js";
 
 const router = express.Router();
 
 router.post(
     "/new",
     verifyJWT,
-    validateAndSanitizeInput(reportPostSchema),
+    // validateAndSanitizeInput(reportPostSchema),
     reportPost
 ); // User reports a post
 

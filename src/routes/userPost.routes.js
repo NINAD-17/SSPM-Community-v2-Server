@@ -8,7 +8,7 @@ import {
     updatePost,
     uploadMedia,
 } from "../controllers/userPost.controllers.js";
-import { validateAndSanitizePost } from "../middlewares/validation.middleware.js";
+// import { validateAndSanitizePost } from "../middlewares/validation.middleware.js";
 
 const router = new Router();
 
@@ -26,14 +26,14 @@ const uploadPostMediaOptions = {
     fields: [{ name: "media", maxCount: 5 }],
 };
 
-router.route("/create").post(verifyJWT, validateAndSanitizePost, createPost);
+router.route("/create").post(verifyJWT, createPost);
 router
     .route("/upload-media")
     .post(verifyJWT, getMulterMiddleware(uploadPostMediaOptions), uploadMedia);
 router
     .route("/:postId")
     .get(verifyJWT, getUserPost)
-    .patch(verifyJWT, validateAndSanitizePost, updatePost)
+    .patch(verifyJWT, updatePost)
     .delete(verifyJWT, deletePost);
 
 router.route("/:userId").get(verifyJWT, getUserPosts);
