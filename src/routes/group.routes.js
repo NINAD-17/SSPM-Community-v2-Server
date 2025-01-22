@@ -1,6 +1,22 @@
 import express from "express";
 import { isAdmin, verifyJWT } from "../middlewares/auth.middleware.js";
-import { approveMembership, createGroup, getAllGroups, getGroup, getGroupAdmins, getGroupMembers, joinGroup, leaveGroup, makeAdmin, rejectMembership, removeAdmin, updateGroupDetails, uploadAvatarImg, uploadCoverImg } from "../controllers/group.controllers.js";
+import {
+    approveMembership,
+    createGroup,
+    getAllGroups,
+    getAllUserJoinedGroups,
+    getGroup,
+    getGroupAdmins,
+    getGroupMembers,
+    joinGroup,
+    leaveGroup,
+    makeAdmin,
+    rejectMembership,
+    removeAdmin,
+    updateGroupDetails,
+    uploadAvatarImg,
+    uploadCoverImg,
+} from "../controllers/group.controllers.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
 
 const router = express.Router();
@@ -11,16 +27,20 @@ router.route("/create").post(verifyJWT, isAdmin, createGroup);
 const avatarOptions = {
     allowedTypes: ["image/jpeg", "image/png", "image/jpg"],
     fileSizeLimit: 10 * 1024 * 1024, // 10 MB
-    singleName: "avatar"
-}
-router.route("/:groupId/avatar").patch(verifyJWT, getMulterMiddleware(avatarOptions), uploadAvatarImg);
+    singleName: "avatar",
+};
+router
+    .route("/:groupId/avatar")
+    .patch(verifyJWT, getMulterMiddleware(avatarOptions), uploadAvatarImg);
 
 const coverImgOptions = {
     allowedTypes: ["image/jpeg", "image/png", "image/jpg"],
     fileSizeLimit: 10 * 1024 * 1024, // 10 MB
-    singleName: "cover"
-}
-router.route("/:groupId/cover").patch(verifyJWT, getMulterMiddleware(coverImgOptions), uploadCoverImg);
+    singleName: "cover",
+};
+router
+    .route("/:groupId/cover")
+    .patch(verifyJWT, getMulterMiddleware(coverImgOptions), uploadCoverImg);
 
 // Group update and member management routes
 router.route("/:groupId/update").patch(verifyJWT, updateGroupDetails);
@@ -41,8 +61,9 @@ router.route("/:groupId/members").get(verifyJWT, getGroupMembers);
 router.route("/:groupId/admins").get(verifyJWT, getGroupAdmins);
 
 // Get all groups
-router.route("/groups", getAllGroups);
+router.route("/groups").get(verifyJWT, getAllGroups);
 
 // Get all user joined groups
+router.route("/groups/:userId/").get(verifyJWT, getAllUserJoinedGroups);
 
 export default router;

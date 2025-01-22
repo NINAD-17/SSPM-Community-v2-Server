@@ -511,6 +511,64 @@ const getAllGroups = asyncHandler(async (req, res) => {
     }
 });
 
+const getAllUserJoinedGroups = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const groups = await Membership.aggregate([
+            {
+                $match: {
+                    userId: mongoose.Types.ObjectId(userId),
+                    status: "approved",
+                },
+            },
+            {
+                $lookup: {
+                    from: "groups",
+                    localField: "groupId",
+                    foreignField: "_id",
+                    as: "group",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                name: 1,
+                                description: 1,
+                                avatarImg: 1,
+                                coverImg: 1,
+                                visibility: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $addFields: {
+                    group: {
+                        $arrayElemAt: ["$group", 0],
+                    },
+                },
+            },
+        ]);
+
+        if (groups.length === 0) {
+            res.status(200).json(
+                new ApiResponse(200, [], "No user joined groups found!")
+            );
+        }
+
+        res.status(200).json(
+            new ApiResponse(
+                200,
+                groups,
+                "All user joined groups retrieved successfully!"
+            )
+        );
+    } catch (error) {
+        throw new ApiError(500, "Failed to get all user joined groups!");
+    }
+});
+
 export {
     createGroup,
     uploadAvatarImg,
@@ -526,4 +584,5 @@ export {
     getGroupMembers,
     getGroupAdmins,
     getAllGroups,
+    getAllUserJoinedGroups,
 };
