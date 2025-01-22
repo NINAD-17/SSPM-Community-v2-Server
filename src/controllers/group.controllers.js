@@ -35,18 +35,9 @@ const uploadAvatarImg = asyncHandler(async (req, res) => {
             throw new ApiError(404, "Group not found!");
         }
 
-        let authorizedUser = false;
-        if (req.user.isAdmin) {
-            authorizedUser = true;
-        } else {
-            const memberAdmin = await Membership.find({
-                groupId,
-                userId,
-                role: "admin",
-            });
-
-            memberAdmin ? (authorizedUser = true) : false;
-        }
+        const authorizedUser =
+            req.user.isAdmin ||
+            (await Membership.exists({ groupId, userId, role: "admin" }));
 
         if (!authorizedUser) {
             throw new ApiError(403, "Unauthorized to upload avatar image!");
@@ -84,18 +75,9 @@ const uploadCoverImg = asyncHandler(async (req, res) => {
             throw new ApiError(404, "Group not found!");
         }
 
-        let authorizedUser = false;
-        if (req.user.isAdmin) {
-            authorizedUser = true;
-        } else {
-            const memberAdmin = await Membership.find({
-                groupId,
-                userId,
-                role: "admin",
-            });
-
-            memberAdmin ? (authorizedUser = true) : false;
-        }
+        const authorizedUser =
+            req.user.isAdmin ||
+            (await Membership.exists({ groupId, userId, role: "admin" }));
 
         if (!authorizedUser) {
             throw new ApiError(403, "Unauthorized to upload cover image!");
