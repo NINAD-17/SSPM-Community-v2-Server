@@ -29,7 +29,7 @@ const getMulterMiddleware = (options = {}) => {
         storage,
         fileFilter,
         limits: {
-            fileSize: options.fileSizeLimit || 50 * 1024 * 1024,
+            fileSize: options.fileSizeLimit || 50 * 1024 * 1024, // default 50 MB
         },
     });
 
