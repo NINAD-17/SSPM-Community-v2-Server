@@ -3,7 +3,7 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Opportunity from "../models/opportunity.model.js";
 
-const createOpportunity = asyncHandler(async(req, res) => {
+const createOpportunity = asyncHandler(async (req, res) => {
     const {
         title,
         description,
@@ -113,7 +113,7 @@ const deleteOpportunity = asyncHandler(async (req, res) => {
     }
 });
 
-const getAllOpportunities = asyncHandler(async(req, res) => {
+const getAllOpportunities = asyncHandler(async (req, res) => {
     try {
         const opportunities = await Opportunity.aggregate([
             {
@@ -133,28 +133,32 @@ const getAllOpportunities = asyncHandler(async(req, res) => {
                                 _id: 1,
                                 firstName: 1,
                                 lastName: 1,
-                                avatar: 1
-                            }
-                        }
-                    ]
-                }
+                                avatar: 1,
+                            },
+                        },
+                    ],
+                },
             },
             {
                 $addFields: {
-                    postedBy: { $arrayElemAt: ["$postedBy", 0] }
-                }
-            }
+                    postedBy: { $arrayElemAt: ["$postedBy", 0] },
+                },
+            },
         ]);
-    
-        if(opportunities.length === 0) {
-            return res.status(200).json(
-                new ApiResponse(200, [], "No opportunities found!")
-            )
+
+        if (opportunities.length === 0) {
+            return res
+                .status(200)
+                .json(new ApiResponse(200, [], "No opportunities found!"));
         }
-    
+
         res.status(200).json(
-            new ApiResponse(200, opportunities, "All opportunities retrieved successfully!")
-        )
+            new ApiResponse(
+                200,
+                opportunities,
+                "All opportunities retrieved successfully!"
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to retrieve opportunities");
     }
@@ -184,27 +188,31 @@ const getOpportunityById = asyncHandler(async (req, res) => {
                                 _id: 1,
                                 firstName: 1,
                                 lastName: 1,
-                                avatar: 1
-                            }
-                        }
-                    ]
-                }
+                                avatar: 1,
+                            },
+                        },
+                    ],
+                },
             },
             {
                 $addFields: {
-                    postedBy: { $arrayElemAt: ["$postedBy", 0] }
-                }
+                    postedBy: { $arrayElemAt: ["$postedBy", 0] },
+                },
             },
             // TODO: add code to fetch comments and likes
         ]);
 
-        if(!opportunity) {
+        if (!opportunity) {
             throw new ApiError(404, "Opportunity not found!");
         }
 
         res.status(200).json(
-            new ApiResponse(200, opportunity[0], "Opportunity retrieved successfully!")
-        )
+            new ApiResponse(
+                200,
+                opportunity[0],
+                "Opportunity retrieved successfully!"
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to retrieve opportunity");
     }
@@ -233,28 +241,32 @@ const getOpportunitiesByUser = asyncHandler(async (req, res) => {
                                 _id: 1,
                                 firstName: 1,
                                 lastName: 1,
-                                avatar: 1
-                            }
-                        }
-                    ]
-                }
+                                avatar: 1,
+                            },
+                        },
+                    ],
+                },
             },
             {
                 $addFields: {
-                    postedBy: { $arrayElemAt: ["$postedBy", 0] }
-                }
-            }
+                    postedBy: { $arrayElemAt: ["$postedBy", 0] },
+                },
+            },
         ]);
 
-        if(opportunities.length === 0) {
-            return res.status(200).json(
-                new ApiResponse(200, [], "No opportunities found!")
-            )
+        if (opportunities.length === 0) {
+            return res
+                .status(200)
+                .json(new ApiResponse(200, [], "No opportunities found!"));
         }
 
         res.status(200).json(
-            new ApiResponse(200, opportunities, "Opportunities retrieved successfully!")
-        )
+            new ApiResponse(
+                200,
+                opportunities,
+                "Opportunities retrieved successfully!"
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to retrieve opportunities");
     }
@@ -269,7 +281,7 @@ const getOpportunitiesByCategory = asyncHandler(async (req, res) => {
                 $match: {
                     category,
                     status: "Active",
-                }
+                },
             },
             {
                 $lookup: {
@@ -283,31 +295,49 @@ const getOpportunitiesByCategory = asyncHandler(async (req, res) => {
                                 _id: 1,
                                 firstName: 1,
                                 lastName: 1,
-                                avatar: 1
-                            }
-                        }
-                    ]
-                }
+                                avatar: 1,
+                            },
+                        },
+                    ],
+                },
             },
             {
                 $addFields: {
-                    postedBy: { $arrayElemAt: ["$postedBy", 0] }
-                }
-            }
+                    postedBy: { $arrayElemAt: ["$postedBy", 0] },
+                },
+            },
         ]);
 
-        if(opportunities.length === 0) {
-            return res.status(200).json(
-                new ApiResponse(200, [], "No opportunities found for this category!")
-            )
+        if (opportunities.length === 0) {
+            return res
+                .status(200)
+                .json(
+                    new ApiResponse(
+                        200,
+                        [],
+                        "No opportunities found for this category!"
+                    )
+                );
         }
 
         res.status(200).json(
-            new ApiResponse(200, opportunities, "Opportunities retrieved successfully!")
-        )
+            new ApiResponse(
+                200,
+                opportunities,
+                "Opportunities retrieved successfully!"
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to fetch opportunities by category");
     }
 });
 
-export { createOpportunity, editOpportunity, deleteOpportunity, getAllOpportunities, getOpportunityById, getOpportunitiesByUser, getOpportunitiesByCategory };
+export {
+    createOpportunity,
+    editOpportunity,
+    deleteOpportunity,
+    getAllOpportunities,
+    getOpportunityById,
+    getOpportunitiesByUser,
+    getOpportunitiesByCategory,
+};

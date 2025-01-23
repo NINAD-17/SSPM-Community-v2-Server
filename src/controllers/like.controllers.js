@@ -4,7 +4,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import Like from "../models/like.model.js";
 
 const togglePostLike = asyncHandler(async (req, res) => {
-    const { postId, postType, commentId } = req.params;
+    const { postId } = req.params;
+    const { postType, commentId } = req.body;
     // If commentId is included then it's a like of comment and not the like of post
 
     try {
@@ -18,11 +19,7 @@ const togglePostLike = asyncHandler(async (req, res) => {
         if (like) {
             await Like.findByIdAndDelete(like._id);
             res.status(200).json(
-                new ApiResponse(
-                    200,
-                    { liked: false },
-                    "Disliked post"
-                )
+                new ApiResponse(200, { liked: false }, "Disliked post")
             );
         } else {
             const newLike = await Like.create({

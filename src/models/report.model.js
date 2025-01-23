@@ -2,10 +2,14 @@ import mongoose from "mongoose";
 
 const reportSchema = new mongoose.Schema(
     {
+        postType: {
+            type: String,
+            enum: ["UserPost", "GroupPost", "EventPost", "Opportunity"],
+            required: true,
+        },
         postId: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
-            ref: "UserPost",
         },
         reportedBy: {
             type: mongoose.Schema.Types.ObjectId,

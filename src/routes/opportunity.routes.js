@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { createOpportunity, deleteOpportunity, editOpportunity, getAllOpportunities, getOpportunitiesByCategory, getOpportunitiesByUser, getOpportunityById } from "../controllers/opportunity.controllers";
+import {
+    createOpportunity,
+    deleteOpportunity,
+    editOpportunity,
+    getAllOpportunities,
+    getOpportunitiesByCategory,
+    getOpportunitiesByUser,
+    getOpportunityById,
+} from "../controllers/opportunity.controllers";
 
 const router = Router();
 

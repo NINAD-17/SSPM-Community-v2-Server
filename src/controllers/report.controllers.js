@@ -4,14 +4,15 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import UserPost from "../models/userpost.model.js";
 import Report from "../models/report.model.js";
 
-const reportPost = asyncHandler(async(req, res) => {
+const reportPost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
-    const { reason, message } = req.body;
+    const { postType, reason, message } = req.body;
     const userId = req.user._id;
 
     try {
         const report = await Report.create({
             postId,
+            postType,
             reportedBy: userId,
             message,
             reason,
@@ -19,19 +20,27 @@ const reportPost = asyncHandler(async(req, res) => {
 
         res.status(200).json(
             new ApiResponse(200, report, "Post reported successfully!")
-        )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to report post.");
     }
 });
 
-const getReportedPosts = asyncHandler(async(req, res) => {
+const getReportedPosts = asyncHandler(async (req, res) => {
+    const { postType } = req.params;
+
+    const matchedStage = {
+        status: "pending",
+    };
+
+    if (postType !== "all") {
+        matchedStage.postType = postType;
+    }
+
     try {
         const reports = await Report.aggregate([
             {
-                $match: {
-                    status: "pending",
-                },
+                $match: matchedStage,
             },
             {
                 $lookup: {
@@ -73,27 +82,31 @@ const getReportedPosts = asyncHandler(async(req, res) => {
             },
         ]);
 
-        if(reports.length === 0) {
+        if (reports.length === 0) {
             res.status(200).json(
                 new ApiResponse(200, [], "No reported posts found.")
-            )
+            );
         }
 
         res.status(200).json(
-            new ApiResponse(200, reports, "Reported posts fetched successfully.")
-        )
+            new ApiResponse(
+                200,
+                reports,
+                "Reported posts fetched successfully."
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to fetch reported posts!");
     }
 });
 
-const reviewReport = asyncHandler(async(req, res) => {
+const reviewReport = asyncHandler(async (req, res) => {
     const { reportId } = req.params;
 
     try {
         const report = await Report.findById(reportId);
 
-        if(!report) {
+        if (!report) {
             throw new ApiError(404, "Report not found.");
         }
 
@@ -112,6 +125,6 @@ const reviewReport = asyncHandler(async(req, res) => {
     } catch (error) {
         throw new ApiError(500, "Failed to review report");
     }
-})
+});
 
 export { reportPost, getReportedPosts, reviewReport };
