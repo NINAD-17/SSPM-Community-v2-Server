@@ -4,7 +4,7 @@ const likeSchema = new Schema(
     {
         postType: {
             type: String,
-            enum: ["UserPost", "GroupPost", "EventPost"], // Polymorphic relationships: enable a model to belong to more than one other model on a single association
+            enum: ["UserPost", "GroupPost", "EventPost", "Opportunity"], // Polymorphic relationships: enable a model to belong to more than one other model on a single association
             required: true,
         },
         postId: {

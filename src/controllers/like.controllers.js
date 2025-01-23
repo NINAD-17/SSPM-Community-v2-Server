@@ -20,7 +20,7 @@ const togglePostLike = asyncHandler(async (req, res) => {
             res.status(200).json(
                 new ApiResponse(
                     200,
-                    { message: "Disliked post" },
+                    { liked: false },
                     "Disliked post"
                 )
             );
@@ -32,7 +32,13 @@ const togglePostLike = asyncHandler(async (req, res) => {
                 likedBy: req.user._id,
             });
 
-            res.status(201).json(new ApiResponse(201, newLike, "Liked post"));
+            res.status(201).json(
+                new ApiResponse(
+                    201,
+                    { liked: true, like: newLike },
+                    "Liked post"
+                )
+            );
         }
     } catch (error) {
         throw new ApiError(500, "Failed to toggle post like.");

@@ -4,7 +4,7 @@ const commentSchema = new Schema(
     {
         postType: {
             type: String,
-            enum: ["UserPost", "GroupPost", "EventPost"],
+            enum: ["UserPost", "GroupPost", "EventPost", "Opportunity"],
             required: true,
         },
         postId: {
