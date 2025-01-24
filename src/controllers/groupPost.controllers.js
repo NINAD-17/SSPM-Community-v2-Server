@@ -1,64 +1,101 @@
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import UserPost from "../models/userpost.model.js";
+import GroupPost from "../models/groupPost.model.js";
+import Membership from "../models/groupMembership.model.js";
 
 // create a post
-const createPost = asyncHandler(async (req, res) => {
+const createPostWithMedia = asyncHandler(async (req, res) => {
+    const { groupId } = req.params;
     const { content } = req.body;
     const userId = req.user._id;
 
-    const post = await UserPost.create({
+    // Check if the user is an approved group member
+    const isGroupMember = await Membership.findOne({
+        groupId,
         userId,
-        content,
-        media: media || [],
+        status: "approved",
     });
 
-    if (!post) {
-        throw new ApiError(500, "Failed to create post.");
+    if (!isGroupMember) {
+        throw new ApiError(403, "You are not a member of this group.");
     }
 
-    res.status(201).json(
-        new ApiResponse(201, post, "Post created successfully!")
-    );
-});
+    // Check if the user joined at least 6 hours ago
+    const sixHoursInMillis = 6 * 60 * 60 * 1000;
+    if (
+        new Date(isGroupMember.joinedAt) >=
+        new Date(Date.now() - sixHoursInMillis)
+    ) {
+        throw new ApiError(
+            403,
+            "New members need to wait for 6 hours to post anything."
+        );
+    }
 
-const uploadMedia = asyncHandler(async (req, res) => {
     if (!req.files || req.files.length === 0) {
         throw new ApiError(400, "No files were uploaded!");
     }
 
-    const mediaUrls = [];
-    for (const file of req.files) {
-        const response = await uploadOnCloudinary(file.path);
-        if (response && response.url) {
-            mediaUrls.push(response.url);
+    let mediaUrls = [];
+    let publicIds = [];
+    try {
+        // Upload media to Cloudinary
+        for (const file of req.files) {
+            const response = await uploadOnCloudinary(file.path);
+            if (response && response.url) {
+                mediaUrls.push(response.url);
+                publicIds.push(response.public_id); // Store the public_id
+            }
         }
-    }
 
-    if (mediaUrls.length === 0) {
-        throw new ApiError(500, "Failed to upload media.");
-    }
+        if (mediaUrls.length === 0) {
+            throw new ApiError(500, "Failed to upload media.");
+        }
 
-    req.status(200).json(
-        new ApiResponse(200, mediaUrls, "Media uploaded successfully!")
-    );
+        // Create the group post
+        const post = await GroupPost.create({
+            userId,
+            groupId,
+            content,
+            media: mediaUrls,
+        });
+
+        if (!post) {
+            throw new Error("Failed to create post.");
+        }
+
+        res.status(201).json(
+            new ApiResponse(201, post, "Post created successfully!")
+        );
+    } catch (error) {
+        // Delete uploaded media from Cloudinary if post creation fails
+        for (const publicId of publicIds) {
+            await deleteFromCloudinary(publicId); // Use public_id for deletion
+        }
+
+        throw new ApiError(500, "Failed to create post with media.");
+    }
 });
 
-const updatePost = asyncHandler(async (req, res) => {
-    const { postId } = req.params;
+const updateGroupPost = asyncHandler(async (req, res) => {
+    const { postId, groupId } = req.params;
     const { content } = req.body;
 
     try {
-        const post = await UserPost.findById(postId);
+        const post = await GroupPost.findOne({ _id: postId, groupId });
+
+        if (!post) {
+            throw new ApiError(404, "Post not found.");
+        }
 
         if (post.userId.toString() !== req.user._id.toString()) {
             throw new ApiError(403, "Unauthorized to update this post.");
         }
 
         post.content = content;
+        post.isEdited = true;
         await post.save();
 
         res.status(200).json(
@@ -69,11 +106,15 @@ const updatePost = asyncHandler(async (req, res) => {
     }
 });
 
-const deletePost = asyncHandler(async (req, res) => {
-    const { postId } = req.params;
+const deleteGroupPost = asyncHandler(async (req, res) => {
+    const { postId, groupId } = req.params;
 
     try {
-        const post = await UserPost.findById(postId);
+        const post = await GroupPost.findOne({ _id: postId, groupId });
+
+        if (!post) {
+            throw new ApiError(404, "Post not found.");
+        }
 
         if (post.userId.toString() !== req.user._id.toString()) {
             throw new ApiError(403, "Unauthorized to delete this post.");
@@ -89,8 +130,8 @@ const deletePost = asyncHandler(async (req, res) => {
     }
 });
 
-const getUserPosts = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
+const getGroupPosts = asyncHandler(async (req, res) => {
+    const { groupId } = req.params;
     const {
         lastPostId = "",
         fetchCount = 1,
@@ -102,10 +143,10 @@ const getUserPosts = asyncHandler(async (req, res) => {
     const limitInt = parseInt(limit, 10);
 
     try {
-        const posts = await UserPost.aggregate([
+        const posts = await GroupPost.aggregate([
             {
                 $match: {
-                    userId: new mongoose.Types.ObjectId(userId),
+                    groupId: new mongoose.Types.ObjectId(groupId),
                     _id: {
                         [sortType === "desc" ? "$lt" : "$gt"]:
                             new mongoose.Types.ObjectId(lastPostId),
@@ -152,8 +193,8 @@ const getUserPosts = asyncHandler(async (req, res) => {
             // Todo: total likes and comments and shares
         ]);
 
-        const totalPosts = await UserPost.countDocuments({
-            userId: new mongoose.Types.ObjectId(userId),
+        const totalPosts = await GroupPost.countDocuments({
+            groupId: new mongoose.Types.ObjectId(groupId),
         });
         const totalFetchedPosts = lastPostId
             ? posts.length + parseInt(fetchCount) * limitInt
@@ -164,22 +205,23 @@ const getUserPosts = asyncHandler(async (req, res) => {
             new ApiResponse(
                 200,
                 { posts, totalPosts, allPostsFetched },
-                "User posts fetched successfully!"
+                "Group posts fetched successfully!"
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get user posts.");
+        throw new ApiError(500, "Failed to get group posts.");
     }
 });
 
-const getUserPost = asyncHandler(async (req, res) => {
-    const { postId } = req.params;
+const getGroupPost = asyncHandler(async (req, res) => {
+    const { postId, groupId } = req.params;
 
     try {
-        const post = await UserPost.aggregate([
+        const post = await GroupPost.aggregate([
             {
                 $match: {
                     _id: new mongoose.Types.ObjectId(postId),
+                    groupId,
                 },
             },
             {
@@ -213,23 +255,26 @@ const getUserPost = asyncHandler(async (req, res) => {
             },
         ]);
 
-        if (!post) {
+        if (!post || post.length === 0) {
             throw new ApiError(404, "Post not found.");
         }
 
         res.status(200).json(
-            new ApiResponse(200, { post }, "User post fetched successfully!")
+            new ApiResponse(
+                200,
+                { post: post[0] },
+                "group post fetched successfully!"
+            )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get user post.");
+        throw new ApiError(500, "Failed to get group post.");
     }
 });
 
 export {
-    createPost,
-    uploadMedia,
-    updatePost,
-    deletePost,
-    getUserPosts,
-    getUserPost,
+    createPostWithMedia,
+    updateGroupPost,
+    deleteGroupPost,
+    getGroupPosts,
+    getGroupPost,
 };
