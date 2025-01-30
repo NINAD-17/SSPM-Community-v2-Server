@@ -1,11 +1,11 @@
-import ApiError from "../utils/apiError";
-import ApiResponse from "../utils/apiResponse";
-import asyncHandler from "../utils/asyncHandler";
-import { Follower } from "../models/Follower";
-import { User } from "../models/user.model";
+import {ApiError} from "../utils/apiError.js";
+import {ApiResponse} from "../utils/apiResponse.js";
+import {asyncHandler} from "../utils/asyncHandler.js";
+import { Follower } from "../models/follower.model.js";
+import { User } from "../models/user.model.js";
 import mongoose from "mongoose";
 
-const toogleFollow = asyncHandler(async(req, res) => {
+const toggleFollow = asyncHandler(async(req, res) => {
     const { targetUserId } = req.params;
     const userId = req.user._id;
 
@@ -199,4 +199,4 @@ const followStatus = asyncHandler(async(req, res) => {
     }
 })
 
-export { toogleFollow, getUserFollowers, getUserFollowings, followStatus };
+export { toggleFollow, getUserFollowers, getUserFollowings, followStatus };

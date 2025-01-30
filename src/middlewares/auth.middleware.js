@@ -15,6 +15,19 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
 
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
+        // check for access token expiration
+        if (decodedToken.exp * 1000 < Date.now()) {
+            return res
+                .status(401)
+                .json(
+                    new ApiResponse(
+                        401,
+                        { expired: true },
+                        "Access Token Expired!"
+                    )
+                );
+        }
+
         const user = await User.findById(decodedToken?._id).select(
             "-password -refreshToken"
         );

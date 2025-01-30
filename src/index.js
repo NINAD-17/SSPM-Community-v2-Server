@@ -1,10 +1,15 @@
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
 import app from "./app.js";
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({
-    path: "./.env",
-});
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables with explicit path
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 connectDB()
     .then(() => {

@@ -1,7 +1,7 @@
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import Connection from "../models/connection.model.js";
+import { Connection } from "../models/connection.model.js";
 import mongoose from "mongoose";
 
 const sendConnectionRequest = asyncHandler(async (req, res) => {
