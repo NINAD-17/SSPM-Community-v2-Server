@@ -1,4 +1,4 @@
-import { ApiError } from "../utils/apiError";
+import { ApiError } from "../utils/apiError.js";
 import { updateUserSchema } from "../validators/user.validators.js";
 import { createUserPostSchema, updateUserPostSchema } from "../validators/userPost.validators.js";
 import xss from "xss";
@@ -6,30 +6,38 @@ import sanitizeHtml from "sanitize-html";
 
 export const validateAndSanitizeInput = (schema) => {
     return (req, res, next) => {
-        // Sanitize input
-        const sanitizedBody = {};
-        Object.keys(req.body).forEach((key) => {
-            sanitizedBody[key] = xss(req.body[key]);
-        });
-        req.body = sanitizedBody;
+        try {
+            // Sanitize input
+            const sanitizedBody = {};
+            Object.keys(req.body).forEach((key) => {
+                if (typeof req.body[key] === 'object') {
+                    sanitizedBody[key] = req.body[key]; // Don't sanitize objects/arrays
+                } else {
+                    sanitizedBody[key] = xss(String(req.body[key]));
+                }
+            });
+            req.body = sanitizedBody;
 
-        // Validate input
-        const { error } = schema.validate(req.body, {
-            abortEarly: false,
-            allowUnknown: true,
-        });
+            // Validate input
+            const { error } = schema.validate(req.body, {
+                abortEarly: false,
+                allowUnknown: true,
+                stripUnknown: false
+            });
 
-        if (error) {
-            const validationErrors = error.details.map((detail) => ({
-                message: detail.message,
-                path: detail.path,
-            }));
+            if (error) {
+                const validationErrors = error.details.map((detail) => ({
+                    field: detail.path[0],
+                    message: detail.message
+                }));
 
-            throw new ApiError(400, "Invalid input", validationErrors);
-            // return res.status(400).json({ errors: validationErrors });
+                throw new ApiError(400, "Validation failed", validationErrors);
+            }
+
+            next();
+        } catch (error) {
+            next(error);
         }
-
-        next();
     };
 };
 

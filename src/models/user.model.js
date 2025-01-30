@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
         index: true
     },
     avatar: { 
-        type: String 
+        type: String,
     }, // URL or path to avatar image
     headline: { 
         type: String,
@@ -89,7 +89,7 @@ userSchema.methods.comparePassword = async function (password) {
     return await bcrypt.compare(password, this.password); // It'll return true or false
 };
 
-userSchema.methods.generateAccessToken = async function () {
+userSchema.methods.generateAccessToken = function () {
     return jwt.sign(
         {
             _id: this._id,
