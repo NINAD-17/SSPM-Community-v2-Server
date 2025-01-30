@@ -1,6 +1,4 @@
 import { ApiError } from "../utils/apiError.js";
-import { updateUserSchema } from "../validators/user.validators.js";
-import { createUserPostSchema, updateUserPostSchema } from "../validators/userPost.validators.js";
 import xss from "xss";
 import sanitizeHtml from "sanitize-html";
 
