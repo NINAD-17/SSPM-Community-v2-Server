@@ -29,8 +29,12 @@ app.use(cookieParser());
 import userRoutes from "./routes/user.routes.js";
 import connectionRoutes from "./routes/connection.routes.js";
 import followerRoutes from "./routes/follower.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import healthCheckRoutes from "./routes/healthCheck.routes.js";
 
 // Routes Declaration
+app.use("/api/v2/auth", authRoutes);
+app.use("/api/v2/healthcheck", healthCheckRoutes);
 app.use("/api/v2/users", userRoutes);
 app.use("/api/v2/connections", connectionRoutes);
 app.use("/api/v2/followers", followerRoutes);
