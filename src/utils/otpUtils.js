@@ -16,9 +16,6 @@ const verifyOTP = (email, otp) => {
     const storedData = otpStore.get(email);
     if (!storedData) return false;
 
-    console.log("verify otp: ", otp, " type: ", typeof otp);
-    console.log("Stored Data: ", storedData);
-
     if (Date.now() > storedData.expiryTime) {
         console.log("expired??: ", Date.now() > storedData.expiryTime);
         otpStore.delete(email);

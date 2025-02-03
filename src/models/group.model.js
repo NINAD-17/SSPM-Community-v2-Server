@@ -1,15 +1,36 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose from "mongoose";
 
-const groupSchema = new Schema(
+const groupSchema = new mongoose.Schema(
     {
         name: {
             type: String,
             required: true,
-            unique: true,
+            trim: true
         },
         description: {
             type: String,
-            required: true,
+            required: true
+        },
+        category: {
+            type: String,
+            required: true
+        },
+        skills: [{
+            type: String,
+            required: true
+        }],
+        members: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        }],
+        admins: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        }],
+        isPrivate: {
+            type: Boolean,
+            default: false
         },
         visibility: {
             type: String,

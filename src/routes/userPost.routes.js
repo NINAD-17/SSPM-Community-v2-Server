@@ -3,6 +3,8 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
 import {
     createPost,
+    deletePost,
+    getAllPosts,
     getUserPost,
     getUserPosts,
     updatePost,
@@ -36,6 +38,7 @@ router
     .patch(verifyJWT, updatePost)
     .delete(verifyJWT, deletePost);
 
-router.route("/:userId").get(verifyJWT, getUserPosts);
+router.route("/user/:userId/all").get(verifyJWT, getUserPosts);
+router.route("/").get(verifyJWT, getAllPosts)
 
 export default router;

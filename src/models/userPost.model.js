@@ -11,6 +11,11 @@ const userPostSchema = new Schema(
             type: String,
             required: true,
         },
+        contentType: {
+            type: String,
+            enum: ["text", "richText"],
+            default: "text"
+        },
         media: [String], // array of media urls
     },
     { timestamps: true }

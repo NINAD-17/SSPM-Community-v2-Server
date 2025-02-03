@@ -46,7 +46,7 @@ const toggleFollow = asyncHandler(async(req, res) => {
         res.status(200).json(
             new ApiResponse(
                 200,
-                { message: followerDocument? "Unfollowed" : "Followed" },
+                { userId: targetUserId, isFollowed: followerDocument? false : true },
                 followerDocument? "User unfollowed successfully!" : "User followed successfully!"
             )
         )
@@ -54,6 +54,37 @@ const toggleFollow = asyncHandler(async(req, res) => {
         throw new ApiError(500, "Failed to toggle follower.");
     }
 });
+
+const removeFollower = asyncHandler(async(req, res) => {
+    const { targetUserId } = req.params;
+    const userId = req.user._id;
+
+    if (targetUserId.toString() === userId.toString()) {
+        throw new ApiError(400, "Cannot remove yourself as a follower");
+    }
+
+    try {
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+            throw new ApiError(404, "User not found.");
+        }
+
+        const followerDocument = await Follower.findByIdAndDelete({
+            follower: targetUserId, 
+            following: userId
+        });
+
+        if(!followerDocument) {
+            throw new ApiError(500, "Failed to remove follower.");
+        }
+
+        res.status(200).json(
+            new ApiResponse(200, { followerId: targetUserId }, "Follower removed successfully!")
+        )
+    } catch (error) {
+        throw new ApiError(500, "Failed to remove a follower");
+    }
+})
 
 const getUserFollowers = asyncHandler(async(req, res) => {
     const { userId } = req.params;
@@ -199,4 +230,4 @@ const followStatus = asyncHandler(async(req, res) => {
     }
 })
 
-export { toggleFollow, getUserFollowers, getUserFollowings, followStatus };
+export { toggleFollow, removeFollower, getUserFollowers, getUserFollowings, followStatus };

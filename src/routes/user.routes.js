@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+    getUserProfile,
     updateAvatar,
     updateProfile,
 } from "../controllers/user.controllers.js";
@@ -10,9 +11,12 @@ import { updateUserSchema } from "../validators/user.validators.js";
 
 const router = Router();
 
+// Get Profile
+router.route("/:userId/profile").get(verifyJWT, getUserProfile);
+
 // Profile Updates
 router
-    .route("/user/user-profile")
+    .route("/:userId/profile/update")
     .patch(
         verifyJWT,
         validateAndSanitizeInput(updateUserSchema),

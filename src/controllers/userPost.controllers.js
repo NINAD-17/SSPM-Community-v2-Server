@@ -1,37 +1,177 @@
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 import UserPost from "../models/userpost.model.js";
 
 // create a post
 const createPost = asyncHandler(async (req, res) => {
-    const { content } = req.body;
+    const { content, media, contentType = "text" } = req.body;
     const userId = req.user._id;
+    let mediaUrls = [];
+
+    try {
+        // If media is present, extract URLs from the response
+        if (media && media.data) {
+            mediaUrls = media.data;
+        }
 
     const post = await UserPost.create({
         userId,
         content,
-        media: media || [],
+            contentType,
+            media: mediaUrls // Now passing just the array of URLs
     });
 
     if (!post) {
+            // If post creation fails, delete uploaded media
+            await Promise.all(mediaUrls.map(url => {
+                const publicId = url.split('/').pop().split('.')[0];
+                return deleteFromCloudinary(publicId);
+            }));
         throw new ApiError(500, "Failed to create post.");
     }
 
+        // Fetch the created post with user details
+        const postWithDetails = await UserPost.aggregate([
+            {
+                $match: { _id: post._id },
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userDetails",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1,
+                                headline: 1,
+                                role: 1,
+                                isAlumni: 1,
+                                isAdmin: 1,
+                                graduationYear: 1,
+                                branch: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "likesCount",
+                },
+            },
+            {
+                $lookup: {
+                    from: "comments",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "commentsCount",
+                },
+            },
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                        { $eq: ["$likedBy", req.user._id] },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                    as: "userLike",
+                },
+            },
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    media: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    userId: 1,
+                    userDetails: { $arrayElemAt: ["$userDetails", 0] },
+                    likesCount: {
+                        $ifNull: [{ $arrayElemAt: ["$likesCount.total", 0] }, 0],
+                    },
+                    commentsCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentsCount.total", 0] }, 0],
+                    },
+                    isLiked: {
+                        $cond: [{ $gt: [{ $size: "$userLike" }, 0] }, true, false],
+                    },
+                },
+            },
+        ]);
+
     res.status(201).json(
-        new ApiResponse(201, post, "Post created successfully!")
-    );
+            new ApiResponse(201, postWithDetails[0], "Post created successfully!")
+        );
+    } catch (error) {
+        // If any error occurs, delete uploaded media
+        if (mediaUrls.length > 0) {
+            await Promise.all(mediaUrls.map(url => {
+                const publicId = url.split('/').pop().split('.')[0];
+                return deleteFromCloudinary(publicId);
+            }));
+        }
+        throw error;
+    }
 });
 
 const uploadMedia = asyncHandler(async (req, res) => {
-    if (!req.files || req.files.length === 0) {
-        throw new ApiError(400, "No files were uploaded!");
+    if (!req.files?.media || req.files.media.length === 0) {
+        throw new ApiError(400, "No files to upload");
     }
 
     const mediaUrls = [];
-    for (const file of req.files) {
+    try {
+        for (const file of req.files.media) {
         const response = await uploadOnCloudinary(file.path);
         if (response && response.url) {
             mediaUrls.push(response.url);
@@ -39,12 +179,20 @@ const uploadMedia = asyncHandler(async (req, res) => {
     }
 
     if (mediaUrls.length === 0) {
-        throw new ApiError(500, "Failed to upload media.");
+            throw new ApiError(500, "Failed to upload media");
     }
 
-    req.status(200).json(
+        res.status(200).json(
         new ApiResponse(200, mediaUrls, "Media uploaded successfully!")
     );
+    } catch (error) {
+        // If error occurs, delete any uploaded files
+        await Promise.all(mediaUrls.map(url => {
+            const publicId = url.split('/').pop().split('.')[0];
+            return deleteFromCloudinary(publicId);
+        }));
+        throw error;
+    }
 });
 
 const updatePost = asyncHandler(async (req, res) => {
@@ -99,18 +247,27 @@ const getUserPosts = asyncHandler(async (req, res) => {
         sortType = "desc",
     } = req.query;
 
-    const limitInt = parseInt(limit, 10);
+    console.log({userId})
 
+    const limitInt = parseInt(limit, 10);
+    const matchStage = {
+        userId: new mongoose.Types.ObjectId(userId),
+    };
+
+    // Include the $match stage for lastPostId only if it's provided
+    if (lastPostId) {
+        matchStage._id = {
+            [sortType === "desc" ? "$lt" : "$gt"]: new mongoose.Types.ObjectId(
+                lastPostId
+            ),
+        };
+    }
+
+    console.log("matchStage", matchStage)
     try {
         const posts = await UserPost.aggregate([
             {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(userId),
-                    _id: {
-                        [sortType === "desc" ? "$lt" : "$gt"]:
-                            new mongoose.Types.ObjectId(lastPostId),
-                    },
-                },
+                $match: matchStage,
             },
             {
                 $sort: {
@@ -144,26 +301,127 @@ const getUserPosts = asyncHandler(async (req, res) => {
                     ],
                 },
             },
+            // Get likes count
             {
-                $addFields: {
-                    userDetails: { $arrayElemAt: ["$userDetails", 0] },
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "likesCount",
                 },
             },
-            // Todo: total likes and comments and shares
+            // Get comments count
+            {
+                $lookup: {
+                    from: "comments",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "commentsCount",
+                },
+            },
+            // Check if current user has liked the post
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                        { $eq: ["$likedBy", req.user._id] },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                    as: "userLike",
+                },
+            },
+            // Final projection
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    media: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    userId: 1,
+                    userDetails: { $arrayElemAt: ["$userDetails", 0] },
+                    likesCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$likesCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    commentsCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$commentsCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    isLiked: {
+                        $cond: [
+                            { $gt: [{ $size: "$userLike" }, 0] },
+                            true,
+                            false,
+                        ],
+                    },
+                },
+            },
         ]);
+
+        console.log("posts", posts);
 
         const totalPosts = await UserPost.countDocuments({
             userId: new mongoose.Types.ObjectId(userId),
         });
+
         const totalFetchedPosts = lastPostId
-            ? posts.length + parseInt(fetchCount) * limitInt
+            ? posts.length + parseInt(fetchCount, 10) * limitInt
             : posts.length;
+
         const allPostsFetched = totalPosts <= totalFetchedPosts;
 
         res.status(200).json(
             new ApiResponse(
                 200,
-                { posts, totalPosts, allPostsFetched },
+                {
+                    posts,
+                    totalPosts,
+                    lastPostId: posts[posts.length - 1]?._id || null,
+                    allPostsFetched,
+                },
                 "User posts fetched successfully!"
             )
         );
@@ -225,6 +483,188 @@ const getUserPost = asyncHandler(async (req, res) => {
     }
 });
 
+const getAllPosts = asyncHandler(async (req, res) => {
+    const {
+        lastPostId = "",
+        fetchCount = 1,
+        limit = 10,
+        sortBy = "createdAt",
+        sortType = "desc",
+    } = req.query;
+
+    const limitInt = parseInt(limit, 10);
+    const matchStage = {};
+
+    // Include the $match stage only if lastPostId is provided
+    if (lastPostId) {
+        matchStage._id = {
+            [sortType === "desc" ? "$lt" : "$gt"]: new mongoose.Types.ObjectId(
+                lastPostId
+            ),
+        };
+    }
+
+    try {
+        const posts = await UserPost.aggregate([
+            {
+                $match: matchStage,
+            },
+            {
+                $sort: {
+                    [sortBy]: sortType === "desc" ? -1 : 1,
+                },
+            },
+            {
+                $limit: limitInt,
+            },
+            // Lookup user details
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userDetails",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1,
+                                headline: 1,
+                                role: 1,
+                                isAlumni: 1,
+                                isAdmin: 1,
+                                graduationYear: 1,
+                                branch: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            // Get likes count
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "likesCount",
+                },
+            },
+            // Get comments count
+            {
+                $lookup: {
+                    from: "comments",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "commentsCount",
+                },
+            },
+            // Check if current user has liked the post
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                        { $eq: ["$likedBy", req.user._id] },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                    as: "userLike",
+                },
+            },
+            // Final projection
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    media: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    userId: 1,
+                    userDetails: { $arrayElemAt: ["$userDetails", 0] },
+                    likesCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$likesCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    commentsCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$commentsCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    isLiked: {
+                        $cond: [
+                            { $gt: [{ $size: "$userLike" }, 0] },
+                            true,
+                            false,
+                        ],
+                    },
+                },
+            },
+        ]);
+
+        const totalPosts = await UserPost.countDocuments();
+        const totalFetchedPosts = lastPostId
+            ? posts.length + parseInt(fetchCount, 10) * limitInt
+            : posts.length;
+        const allPostsFetched = totalPosts <= totalFetchedPosts;
+
+        res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    posts,
+                    totalPosts,
+                    lastPostId: posts[posts.length - 1]?._id || null,
+                    allPostsFetched,
+                },
+                "Posts fetched successfully!"
+            )
+        );
+    } catch (error) {
+        throw new ApiError(500, "Failed to get posts.");
+    }
+});
+
 export {
     createPost,
     uploadMedia,
@@ -232,4 +672,5 @@ export {
     deletePost,
     getUserPosts,
     getUserPost,
+    getAllPosts,
 };

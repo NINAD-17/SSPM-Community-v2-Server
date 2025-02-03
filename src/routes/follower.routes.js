@@ -4,6 +4,7 @@ import {
     getUserFollowers,
     getUserFollowings,
     followStatus,
+    removeFollower,
 } from "../controllers/follower.controllers.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -11,6 +12,9 @@ const router = express.Router();
 
 // Route to toggle follow/unfollow
 router.route("/follow/:targetUserId").post(verifyJWT, toggleFollow);
+
+// Route to remove a follower
+router.route("/follower/:targetUserId/remove").delete(verifyJWT, removeFollower);
 
 // Route to get followers of a user
 router.route("/:userId").get(verifyJWT, getUserFollowers);

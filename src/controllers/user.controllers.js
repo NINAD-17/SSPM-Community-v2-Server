@@ -7,6 +7,30 @@ import {
     deleteFromCloudinary,
 } from "../utils/cloudinary.js";
 
+const getUserProfile = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const profile = await User.findById(userId);
+
+        if (!profile) {
+            throw new ApiError(404, "User not found");
+        }
+
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    profile,
+                    "User profile retrieved successfully"
+                )
+            );
+    } catch (error) {
+        throw new ApiError(500, "Failed to get user profile.");
+    }
+});
+
 const updateProfile = asyncHandler(async (req, res) => {
     try {
         const updates = req.body;
@@ -89,4 +113,4 @@ const updateAvatar = asyncHandler(async (req, res) => {
     }
 });
 
-export { updateProfile, updateAvatar };
+export { getUserProfile, updateProfile, updateAvatar };

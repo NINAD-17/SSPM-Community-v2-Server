@@ -49,7 +49,7 @@ const initiateRegistration = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { email }, "OTP sent successfully"));
+        .json(new ApiResponse(200, { email, otpSent: true }, "OTP sent successfully"));
 });
 
 // Step 2: Verify Registration OTP
@@ -207,6 +207,7 @@ const verifyLoginOTP = asyncHandler(async (req, res) => {
         "-password -refreshToken"
     );
 
+    console.log("Logged In")
     return res
         .status(200)
         .cookie("accessToken", accessToken, options)

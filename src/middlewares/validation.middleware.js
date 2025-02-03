@@ -15,6 +15,7 @@ export const validateAndSanitizeInput = (schema) => {
                 }
             });
             req.body = sanitizedBody;
+            console.log("validation middleware (req.body): ", req.body);
 
             // Validate input
             const { error } = schema.validate(req.body, {
