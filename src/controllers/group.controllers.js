@@ -3,6 +3,8 @@ import Membership from "../models/groupMembership.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { User } from "../models/user.model.js";
+import mongoose from "mongoose";
 
 const createGroup = asyncHandler(async (req, res) => {
     const { name, description, visibility } = req.body;
@@ -569,6 +571,111 @@ const getAllUserJoinedGroups = asyncHandler(async (req, res) => {
     }
 });
 
+const getRecommendedGroups = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        // Get user's joined groups
+        const userGroups = await Group.find({ members: userId }).select('_id');
+        const userGroupIds = userGroups.map(g => g._id);
+
+        // Get user's skills and interests
+        const user = await User.findById(userId).select('skills interests');
+        
+        // Find groups user hasn't joined yet
+        const recommendedGroups = await Group.aggregate([
+            {
+                $match: {
+                    _id: { $nin: userGroupIds },
+                    $or: [
+                        { skills: { $in: user.skills || [] } },
+                        { category: { $in: user.interests || [] } }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    // Add default empty array if members doesn't exist
+                    members: { $ifNull: ["$members", []] },
+                    membersCount: { 
+                        $size: { 
+                            $ifNull: ["$members", []] 
+                        } 
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    avatarImg: 1,
+                    category: 1,
+                    membersCount: 1
+                }
+            },
+            {
+                $sort: { membersCount: -1 }
+            },
+            {
+                $limit: 5
+            }
+        ]);
+
+        // If not enough recommendations, add popular groups
+        if (recommendedGroups.length < 5) {
+            const remainingCount = 5 - recommendedGroups.length;
+            const popularGroups = await Group.aggregate([
+                {
+                    $match: {
+                        _id: { 
+                            $nin: [...userGroupIds, ...recommendedGroups.map(g => g._id)]
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        // Add default empty array if members doesn't exist
+                        members: { $ifNull: ["$members", []] },
+                        membersCount: { 
+                            $size: { 
+                                $ifNull: ["$members", []] 
+                            } 
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        name: 1,
+                        avatarImg: 1,
+                        category: 1,
+                        membersCount: 1
+                    }
+                },
+                {
+                    $sort: { membersCount: -1 }
+                },
+                {
+                    $limit: remainingCount
+                }
+            ]);
+
+            recommendedGroups.push(...popularGroups);
+        }
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                { recommendations: recommendedGroups },
+                "Group recommendations fetched successfully"
+            )
+        );
+    } catch (error) {
+        console.error("Error in getRecommendedGroups:", error);
+        throw new ApiError(500, "Failed to get group recommendations");
+    }
+});
+
 export {
     createGroup,
     uploadAvatarImg,
@@ -585,4 +692,5 @@ export {
     getGroupAdmins,
     getAllGroups,
     getAllUserJoinedGroups,
+    getRecommendedGroups,
 };

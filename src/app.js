@@ -33,6 +33,8 @@ import authRoutes from "./routes/auth.routes.js";
 import healthCheckRoutes from "./routes/healthCheck.routes.js";
 import userPostRoutes from "./routes/userPost.routes.js"
 import recommendationRoutes from "./routes/recommendation.routes.js";
+import groupRoutes from "./routes/group.routes.js";
+import groupPostRoutes from "./routes/groupPost.routes.js";
 
 // Routes Declaration
 app.use("/api/v2/auth", authRoutes);
@@ -42,6 +44,8 @@ app.use("/api/v2/posts", userPostRoutes);
 app.use("/api/v2/connections", connectionRoutes);
 app.use("/api/v2/followers", followerRoutes);
 app.use("/api/v2/recommendations", recommendationRoutes);
+app.use("/api/v2/groups", groupRoutes);
+app.use("/api/v2/group-posts", groupPostRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

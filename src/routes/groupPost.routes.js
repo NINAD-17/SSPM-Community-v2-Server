@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
 import {
@@ -9,7 +9,7 @@ import {
     updateGroupPost,
 } from "../controllers/groupPost.controllers.js";
 
-const router = new Router();
+const router = express.Router();
 
 // create, update, delete group post
 const uploadPostMediaOptions = {
@@ -26,19 +26,20 @@ const uploadPostMediaOptions = {
 };
 
 router
-    .route("/:groupId/create")
+    .route("/group/:groupId")
+    .get(verifyJWT, getGroupPosts);
+
+router.route("/:postId").get(verifyJWT, getGroupPost);
+
+router
+    .route("/group/:groupId")
     .post(
         verifyJWT,
         getMulterMiddleware(uploadPostMediaOptions),
         createPostWithMedia
     );
-router.route("/:groupId/:postId/update").patch(verifyJWT, updateGroupPost);
-router.route("/:groupId/:postId/delete").delete(verifyJWT, deleteGroupPost);
 
-// Get group post with postId
-router.route("/:groupId/:postId/").get(verifyJWT, getGroupPost);
-
-// Get all posts of a group
-router.route("/:groupId/posts").get(verifyJWT, getGroupPosts);
+router.route("/:postId").patch(verifyJWT, updateGroupPost);
+router.route("/:postId").delete(verifyJWT, deleteGroupPost);
 
 export default router;

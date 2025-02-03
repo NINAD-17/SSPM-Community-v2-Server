@@ -1,6 +1,7 @@
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import mongoose from "mongoose";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import GroupPost from "../models/groupPost.model.js";
 import Membership from "../models/groupMembership.model.js";
@@ -132,89 +133,65 @@ const deleteGroupPost = asyncHandler(async (req, res) => {
 
 const getGroupPosts = asyncHandler(async (req, res) => {
     const { groupId } = req.params;
-    const {
-        lastPostId = "",
-        fetchCount = 1,
-        limit = 10,
-        sortBy = "createdAt",
-        sortType = "desc",
-    } = req.query;
-
-    const limitInt = parseInt(limit, 10);
+    const { lastPostId } = req.query;
+    
+    console.log("Getting posts for group:", { groupId, lastPostId });
 
     try {
-        const posts = await GroupPost.aggregate([
-            {
-                $match: {
-                    groupId: new mongoose.Types.ObjectId(groupId),
-                    _id: {
-                        [sortType === "desc" ? "$lt" : "$gt"]:
-                            new mongoose.Types.ObjectId(lastPostId),
-                    },
-                },
-            },
-            {
-                $sort: {
-                    [sortBy]: sortType === "desc" ? -1 : 1,
-                },
-            },
-            {
-                $limit: limitInt,
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "userDetails",
-                    pipeline: [
-                        {
-                            $project: {
-                                _id: 1,
-                                firstName: 1,
-                                lastName: 1,
-                                avatar: 1,
-                                headline: 1,
-                                role: 1,
-                                isAlumni: 1,
-                                isAdmin: 1,
-                                graduationYear: 1,
-                                branch: 1,
-                            },
-                        },
-                    ],
-                },
-            },
-            {
-                $addFields: {
-                    userDetails: { $arrayElemAt: ["$userDetails", 0] },
-                },
-            },
-            // Todo: total likes and comments and shares
-        ]);
+        const query = { groupId };
+        if (lastPostId) {
+            query._id = { $lt: lastPostId };
+        }
 
-        const totalPosts = await GroupPost.countDocuments({
-            groupId: new mongoose.Types.ObjectId(groupId),
-        });
-        const totalFetchedPosts = lastPostId
-            ? posts.length + parseInt(fetchCount) * limitInt
-            : posts.length;
-        const allPostsFetched = totalPosts <= totalFetchedPosts;
+        const posts = await GroupPost.find(query)
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .populate({
+                path: 'userId',
+                select: 'firstName lastName avatar headline'
+            });
+
+        const totalPosts = await GroupPost.countDocuments({ groupId });
+        
+        const lastPost = posts[posts.length - 1];
+        const allPostsFetched = !lastPost || posts.length < 10;
+
+        // Transform posts to include required fields
+        const transformedPosts = posts.map(post => ({
+            _id: post._id,
+            content: post.content,
+            media: post.media,
+            createdAt: post.createdAt,
+            user: {
+                _id: post.userId._id,
+                firstName: post.userId.firstName,
+                lastName: post.userId.lastName,
+                avatar: post.userId.avatar,
+                headline: post.userId.headline
+            },
+            likesCount: 0, // Add these if you have likes functionality
+            commentsCount: 0, // Add these if you have comments functionality
+            isLiked: false // Add this if you have likes functionality
+        }));
 
         res.status(200).json(
-            new ApiResponse(
-                200,
-                { posts, totalPosts, allPostsFetched },
-                "Group posts fetched successfully!"
-            )
+            new ApiResponse(200, {
+                posts: transformedPosts,
+                totalPosts,
+                lastPostId: lastPost?._id || null,
+                allPostsFetched
+            }, "Group posts fetched successfully!")
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get group posts.");
+        console.error("Error fetching group posts:", error);
+        throw new ApiError(500, "Failed to get group posts");
     }
 });
 
 const getGroupPost = asyncHandler(async (req, res) => {
     const { postId, groupId } = req.params;
+
+    console.log({postId, groupId});
 
     try {
         const post = await GroupPost.aggregate([
@@ -255,6 +232,8 @@ const getGroupPost = asyncHandler(async (req, res) => {
             },
         ]);
 
+        console.log({post});
+
         if (!post || post.length === 0) {
             throw new ApiError(404, "Post not found.");
         }
@@ -267,6 +246,7 @@ const getGroupPost = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
+        console.log({error});
         throw new ApiError(500, "Failed to get group post.");
     }
 });

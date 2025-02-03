@@ -16,10 +16,14 @@ import {
     updateGroupDetails,
     uploadAvatarImg,
     uploadCoverImg,
+    getRecommendedGroups,
 } from "../controllers/group.controllers.js";
 import getMulterMiddleware from "../middlewares/multer.middleware.js";
 
 const router = express.Router();
+
+// Put the recommendations route BEFORE the :groupId routes to prevent the conflict
+router.get("/recommendations", verifyJWT, getRecommendedGroups);
 
 // Group admin and Platform Admin routes
 router.route("/create").post(verifyJWT, isAdmin, createGroup);
