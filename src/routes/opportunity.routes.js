@@ -8,7 +8,7 @@ import {
     getOpportunitiesByCategory,
     getOpportunitiesByUser,
     getOpportunityById,
-} from "../controllers/opportunity.controllers";
+} from "../controllers/opportunity.controllers.js";
 
 const router = Router();
 
