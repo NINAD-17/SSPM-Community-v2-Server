@@ -49,7 +49,13 @@ const initiateRegistration = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { email, otpSent: true }, "OTP sent successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                { email, otpSent: true },
+                "OTP sent successfully"
+            )
+        );
 });
 
 // Step 2: Verify Registration OTP
@@ -207,7 +213,6 @@ const verifyLoginOTP = asyncHandler(async (req, res) => {
         "-password -refreshToken"
     );
 
-    console.log("Logged In")
     return res
         .status(200)
         .cookie("accessToken", accessToken, options)
@@ -304,6 +309,7 @@ const getUserOnLoad = asyncHandler(async (req, res) => {
     }
 });
 
+// ----- Forgot password
 const initiateForgotPasswordRequest = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -328,7 +334,7 @@ const initiateForgotPasswordRequest = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { email }, "OTP sent successfully"));
 });
 
-const verifyForgotPasswordRequest = asyncHandler(async(req, res) => {
+const verifyForgotPasswordRequest = asyncHandler(async (req, res) => {
     const { email, otp } = req.body;
 
     // has the OTP sent to this email?
@@ -354,10 +360,10 @@ const verifyForgotPasswordRequest = asyncHandler(async(req, res) => {
         .json(new ApiResponse(200, "Email verified successfully"));
 });
 
-const completeForgotPassword = asyncHandler(async(req, res) => {
+const completeForgotPassword = asyncHandler(async (req, res) => {
     const { newPassword } = req.body;
     const otpVerificationToken = req.cookies?.otpVerificationToken;
-    
+
     if (!otpVerificationToken) {
         throw new ApiError(401, "Email is not verified");
     }
@@ -384,7 +390,7 @@ const completeForgotPassword = asyncHandler(async(req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: true,
     };
 
     return res
@@ -399,7 +405,8 @@ const completeForgotPassword = asyncHandler(async(req, res) => {
         );
 });
 
-const setNewPassword = asyncHandler(async(req, res) => {
+// ----- Set new password (for logged in user)
+const setNewPassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user._id;
 
@@ -419,8 +426,9 @@ const setNewPassword = asyncHandler(async(req, res) => {
     await user.save();
 
     // Generate new tokens
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(userId);
-    
+    const { accessToken, refreshToken } =
+        await generateAccessAndRefreshTokens(userId);
+
     const options = {
         httpOnly: true,
         secure: true,
