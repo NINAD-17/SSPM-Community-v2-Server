@@ -26,6 +26,8 @@ router
 // Avatar Upload
 const avatarMulterOptions = { singleName: "avatar" };
 const avatarUpload = getMulterMiddleware(avatarMulterOptions);
-router.route("/user/update-avatar").post(verifyJWT, avatarUpload, updateAvatar);
+router
+    .route("/:userId/update-avatar")
+    .post(verifyJWT, avatarUpload, updateAvatar);
 
 export default router;

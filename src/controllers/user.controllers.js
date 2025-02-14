@@ -17,15 +17,13 @@ const getUserProfile = asyncHandler(async (req, res) => {
             throw new ApiError(404, "User not found");
         }
 
-        return res
-            .status(200)
-            .json(
-                new ApiResponse(
-                    200,
-                    profile,
-                    "User profile retrieved successfully"
-                )
-            );
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                { profile }, // data.profile
+                "User profile retrieved successfully"
+            )
+        );
     } catch (error) {
         throw new ApiError(500, "Failed to get user profile.");
     }
@@ -40,7 +38,7 @@ const updateProfile = asyncHandler(async (req, res) => {
             { $set: updates },
             {
                 new: true,
-                runValidators: true,
+                runValidators: true, // by default mongoose will doesn't run validators for update - therefore added explicitly
             }
         ).select("-password -refreshToken");
 
@@ -51,7 +49,11 @@ const updateProfile = asyncHandler(async (req, res) => {
         return res
             .status(200)
             .json(
-                new ApiResponse(200, { user }, "Profile updated successfully")
+                new ApiResponse(
+                    200,
+                    { profile: user },
+                    "Profile updated successfully"
+                )
             );
     } catch (error) {
         throw new ApiError(500, "Error updating profile");
@@ -60,6 +62,7 @@ const updateProfile = asyncHandler(async (req, res) => {
 
 const updateAvatar = asyncHandler(async (req, res) => {
     try {
+        const userId = req.user?._id;
         const avatarLocalPath = req.file?.path;
 
         if (!avatarLocalPath) {
@@ -67,7 +70,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
         }
 
         // Get the user's current avatar public_id
-        const user = await User.findById(req.user?._id);
+        const user = await User.findById(userId);
         const oldAvatarUrl = user?.avatar;
 
         // Upload new avatar to avatars folder
@@ -87,6 +90,8 @@ const updateAvatar = asyncHandler(async (req, res) => {
             { new: true }
         ).select("-password -refreshToken");
 
+        console.log("avatar updated successfully");
+
         // Delete old avatar from cloudinary if it exists
         if (oldAvatarUrl) {
             // Extract public ID from URL
@@ -98,13 +103,14 @@ const updateAvatar = asyncHandler(async (req, res) => {
             await deleteFromCloudinary(publicId, oldAvatarUrl);
         }
 
-        console.log("avatar updated successfully");
+        console.log("Old avatar deleted successfully if any");
+
         return res
             .status(200)
             .json(
                 new ApiResponse(
                     200,
-                    { user: updatedUser },
+                    { profile: updatedUser },
                     "Avatar updated successfully"
                 )
             );
