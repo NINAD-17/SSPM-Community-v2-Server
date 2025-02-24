@@ -1,11 +1,12 @@
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import mongoose from "mongoose";
 import Like from "../models/like.model.js";
 
-const togglePostLike = asyncHandler(async (req, res) => {
+const togglePostLike = asyncHandler(async (req, res, next) => {
     const { postId } = req.params;
-    const { postType, commentId } = req.body;
+    const { postType = "UserPost", commentId } = req.body;
     // If commentId is included then it's a like of comment and not the like of post
 
     try {
@@ -38,12 +39,16 @@ const togglePostLike = asyncHandler(async (req, res) => {
             );
         }
     } catch (error) {
-        throw new ApiError(500, "Failed to toggle post like.");
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to toggle post like."));
+        }
     }
 });
 
 // Only fetching liked posts from user posts.
-const getLikedPosts = asyncHandler(async (req, res) => {
+const getLikedPosts = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
 
     try {
@@ -124,7 +129,12 @@ const getLikedPosts = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get liked posts.");
+        console.log({error});
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get liked posts."));
+        }
     }
 });
 
