@@ -8,7 +8,7 @@ const app = express();
 // CORS Configuration - must be before any route declarations
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN, 
+        origin: process.env.CORS_ORIGIN,
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
@@ -31,7 +31,7 @@ import connectionRoutes from "./routes/connection.routes.js";
 import followerRoutes from "./routes/follower.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import healthCheckRoutes from "./routes/healthCheck.routes.js";
-import userPostRoutes from "./routes/userPost.routes.js"
+import userPostRoutes from "./routes/userPost.routes.js";
 import recommendationRoutes from "./routes/recommendation.routes.js";
 import groupRoutes from "./routes/group.routes.js";
 import groupPostRoutes from "./routes/groupPost.routes.js";
@@ -51,13 +51,23 @@ app.use("/api/v2/opportunities", opportunityRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+    if (err instanceof ApiError) {
+        return res.status(err.statusCode).json({
+            statusCode: err.statusCode,
+            data: err.data,
+            message: err.message,
+            success: err.success,
+            errors: err.errors,
+        });
+    }
+
     console.error(err.stack);
-    res.status(500).json(
-        new ApiError(
-            500,
-            "Something went wrong!"
-        )
-    );
+    res.status(500).json({
+        statusCode: 500,
+        message: "Internal Server Error",
+        success: false,
+        errors: [err.message],
+    });
 });
 
 export default app;

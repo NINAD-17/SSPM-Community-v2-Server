@@ -12,9 +12,9 @@ const objectId = (value, helpers) => {
 const baseUserPostSchema = Joi.object({
     content: Joi.string().trim().min(1).required().messages({
         "string.base": "Content should be a type of text.",
-        "string.empty": "Content cannot be an empty field.",
+        // "string.empty": "Content cannot be an empty field.",
         "string.min": "Content must be at least 1 character long.",
-        "any.required": "Content is a required field.",
+        // "any.required": "Content is a required field.",
     }),
     media: Joi.array().items(Joi.string().uri()).max(5).messages({
         "array.base": "Media should be an array of URIs.",
