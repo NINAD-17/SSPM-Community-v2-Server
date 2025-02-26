@@ -47,6 +47,76 @@ const togglePostLike = asyncHandler(async (req, res, next) => {
     }
 });
 
+const getWhoLikedOnPost = asyncHandler(async (req, res, next) => {
+    const { postId } = req.params;
+    const { postType = "UserPost" } = req.body;
+
+    try {
+        const likedBy = await Like.aggregate([
+            {
+                $match: {
+                    postId: new mongoose.Types.ObjectId(postId),
+                    postType,
+                },
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "likedBy",
+                    foreignField: "_id",
+                    as: "userDetails",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $addFields: {
+                    userDetails: {
+                        $arrayElemAt: ["$userDetails", 0],
+                    },
+                },
+            },
+            {
+                $project: {
+                    userId: "$userDetails._id",
+                    firstName: "$userDetails.firstName",
+                    lastName: "$userDetails.lastName",
+                    avatar: "$userDetails.avatar",
+                }
+            }
+        ]);
+
+        if (likedBy.length === 0) {
+            res.status(200).json(
+                new ApiResponse(200, { likedBy: [] }, "No one liked on post.")
+            );
+        }
+
+        res.status(200).json(
+            new ApiResponse(
+                200,
+                { likedBy },
+                "Who liked on post fetched successfully."
+            )
+        );
+    } catch (error) {
+        console.log(error);
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get who liked on post."));
+        }
+    }
+});
+
 // Only fetching liked posts from user posts.
 const getLikedPosts = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
@@ -129,7 +199,7 @@ const getLikedPosts = asyncHandler(async (req, res, next) => {
             )
         );
     } catch (error) {
-        console.log({error});
+        console.log({ error });
         if (error instanceof ApiError) {
             next(error);
         } else {
@@ -138,4 +208,4 @@ const getLikedPosts = asyncHandler(async (req, res, next) => {
     }
 });
 
-export { togglePostLike, getLikedPosts };
+export { togglePostLike, getWhoLikedOnPost, getLikedPosts };

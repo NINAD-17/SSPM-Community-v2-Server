@@ -37,6 +37,7 @@ import groupRoutes from "./routes/group.routes.js";
 import groupPostRoutes from "./routes/groupPost.routes.js";
 import opportunityRoutes from "./routes/opportunity.routes.js";
 import likeRoutes from "./routes/like.routes.js";
+import commentRoutes from "./routes/comment.routes.js";
 
 // Routes Declaration
 app.use("/api/v2/auth", authRoutes);
@@ -44,6 +45,7 @@ app.use("/api/v2/healthcheck", healthCheckRoutes);
 app.use("/api/v2/users", userRoutes);
 app.use("/api/v2/posts", userPostRoutes);
 app.use("/api/v2/likes", likeRoutes);
+app.use("/api/v2/comments", commentRoutes);
 app.use("/api/v2/connections", connectionRoutes);
 app.use("/api/v2/followers", followerRoutes);
 app.use("/api/v2/recommendations", recommendationRoutes);

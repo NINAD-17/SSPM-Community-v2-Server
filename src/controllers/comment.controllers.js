@@ -2,9 +2,11 @@ import Comment from "../models/comment.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import UserPost from "../models/userPost.model.js";
+import mongoose from "mongoose";
 
-const addCommentOnUserPost = asyncHandler(async (req, res) => {
-    const { postId, postType, content } = req.body;
+const addCommentOnUserPost = asyncHandler(async (req, res, next) => {
+    const { postId, postType = "UserPost", content } = req.body;
     const userId = req.user._id;
 
     // Verify if the post exists
@@ -22,14 +24,23 @@ const addCommentOnUserPost = asyncHandler(async (req, res) => {
         });
 
         res.status(200).json(
-            new ApiResponse(200, newComment, "Comment added successfully!")
+            new ApiResponse(
+                200,
+                { comment: newComment },
+                "Comment added successfully!"
+            )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to add comment!");
+        console.log(error);
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to add comment!"));
+        }
     }
 });
 
-const updateComment = asyncHandler(async (req, res) => {
+const updateComment = asyncHandler(async (req, res, next) => {
     const { commentId } = req.params;
     const { content } = req.body;
     const userId = req.user._id;
@@ -56,11 +67,15 @@ const updateComment = asyncHandler(async (req, res) => {
             new ApiResponse(200, comment, "Comment updated successfully!")
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to update comment!");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to update comment!"));
+        }
     }
 });
 
-const deleteComment = asyncHandler(async (req, res) => {
+const deleteComment = asyncHandler(async (req, res, next) => {
     const { commentId } = req.params;
     const userId = req.user._id;
 
@@ -78,24 +93,29 @@ const deleteComment = asyncHandler(async (req, res) => {
             );
         }
 
-        await comment.remove();
+        await Comment.findByIdAndDelete(commentId);
 
         res.status(200).json(
             new ApiResponse(200, {}, "Comment deleted successfully!")
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to delete comment!");
+        console.log(error);
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to delete comment!"));
+        }
     }
 });
 
 // Get comments from all types of posts (user, group, event)
-const getCommentsOfPost = asyncHandler(async (req, res) => {
+const getCommentsOfPost = asyncHandler(async (req, res, next) => {
     const { postId } = req.params;
     const {
-        postType,
+        postType = "UserPost",
         lastCommentId = null,
         limit = 10,
-        fetchCount = 1,
+        fetchCount = 0,
     } = req.query;
 
     const limitInt = parseInt(limit, 10);
@@ -113,7 +133,7 @@ const getCommentsOfPost = asyncHandler(async (req, res) => {
     try {
         const comments = await Comment.aggregate([
             {
-                $match: matchCondition
+                $match: matchCondition,
             },
             {
                 $sort: { createdAt: -1 },
@@ -153,7 +173,7 @@ const getCommentsOfPost = asyncHandler(async (req, res) => {
             postType,
         });
         const totalFetchedComments = lastCommentId
-            ? comments.length + parseInt(fetchCount) * limitInt
+            ? comments.length + parseInt(fetchCount, 10) * limitInt
             : comments.length;
         const allCommentsFetched = totalComments <= totalFetchedComments;
 
@@ -170,8 +190,17 @@ const getCommentsOfPost = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get comments!");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get comments!"));
+        }
     }
 });
 
-export { addCommentOnUserPost, updateComment, deleteComment, getCommentsOfPost };
+export {
+    addCommentOnUserPost,
+    updateComment,
+    deleteComment,
+    getCommentsOfPost,
+};
