@@ -335,6 +335,7 @@ const getUserPost = asyncHandler(async (req, res) => {
 });
 
 const getUserPosts = asyncHandler(async (req, res, next) => {
+    const loggedInUserId = req.user._id;
     const { userId } = req.params;
     const {
         lastPostId = "",
@@ -379,6 +380,35 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
                     as: "userDetails",
                     pipeline: [
                         {
+                            $lookup: {
+                                from: "followers",
+                                let: { postUserId: "$userId" },
+                                pipeline: [
+                                    {
+                                        $match: {
+                                            $expr: {
+                                                $and: [
+                                                    { $eq: ["$follower", new mongoose.Types.ObjectId(loggedInUserId)] },
+                                                    { $eq: ["$following", "$$postUserId"] }
+                                                ]
+                                            }
+                                        },
+                                    },
+                                    {
+                                        $count: "isFollowing"
+                                    }
+                                ],
+                                as: "followStatus"
+                            }
+                        },
+                        {
+                            $addFields: {
+                                isFollowing: {
+                                    $arrayElemAt: ["$followStatus.isFollowing", 0]
+                                }
+                            }
+                        },
+                        {
                             $project: {
                                 _id: 1,
                                 firstName: 1,
@@ -390,6 +420,13 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
                                 isAdmin: 1,
                                 graduationYear: 1,
                                 branch: 1,
+                                isFollowing: {
+                                    $cond: {
+                                        if: {$gt: ["$isFollowing", 0]},
+                                        then: true,
+                                        else: false
+                                    }
+                                }
                             },
                         },
                     ],
@@ -519,16 +556,18 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
             )
         );
     } catch (error) {
+        console.log(error)
         if (error instanceof ApiError) {
             next(error);
         } else {
-            next(new ApiError(500, "Failed to delete post."));
+            next(new ApiError(500, "Failed to fetch user posts."));
             throw new ApiError(500, "");
         }
     }
 });
 
 const getAllPosts = asyncHandler(async (req, res) => {
+    const loggedInUserId = req.user._id;
     const {
         lastPostId = "",
         fetchCount = 0,
@@ -571,6 +610,35 @@ const getAllPosts = asyncHandler(async (req, res) => {
                     as: "userDetails",
                     pipeline: [
                         {
+                            $lookup: {
+                                from: "followers",
+                                let: { postUserId: "$userId" },
+                                pipeline: [
+                                    {
+                                        $match: {
+                                            $expr: {
+                                                $and: [
+                                                    { $eq: ["$follower", new mongoose.Types.ObjectId(loggedInUserId)] },
+                                                    { $eq: ["$following", "$$postUserId"] }
+                                                ]
+                                            }
+                                        },
+                                    },
+                                    {
+                                        $count: "isFollowing"
+                                    }
+                                ],
+                                as: "followStatus"
+                            }
+                        },
+                        {
+                            $addFields: {
+                                isFollowing: {
+                                    $arrayElemAt: ["$followStatus.isFollowing", 0]
+                                }
+                            }
+                        },
+                        {
                             $project: {
                                 _id: 1,
                                 firstName: 1,
@@ -582,6 +650,13 @@ const getAllPosts = asyncHandler(async (req, res) => {
                                 isAdmin: 1,
                                 graduationYear: 1,
                                 branch: 1,
+                                isFollowing: {
+                                    $cond: {
+                                        if: {$gt: ["$isFollowing", 0]},
+                                        then: true,
+                                        else: false
+                                    }
+                                }
                             },
                         },
                     ],

@@ -4,9 +4,13 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Connection } from "../models/connection.model.js";
 import mongoose from "mongoose";
 
-const sendConnectionRequest = asyncHandler(async (req, res) => {
+const sendConnectionRequest = asyncHandler(async (req, res, next) => {
     const { recipientId } = req.params;
     const requesterId = req.user._id;
+
+    if(recipientId.toString() === requesterId.toString()) {
+        throw new ApiError(400, "Cannot send connection request to yourself!");
+    }
 
     // Check if connection already exists
     const existingConnection = await Connection.findOne({
@@ -15,6 +19,9 @@ const sendConnectionRequest = asyncHandler(async (req, res) => {
     });
 
     if (existingConnection) {
+        if(existingConnection.status === "accepted") {
+            throw new ApiError(400, "Connection already exists!");
+        }
         throw new ApiError(400, "Connection request already sent!");
     }
 
@@ -35,14 +42,20 @@ const sendConnectionRequest = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Failed to save connection request to the database."
-        );
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(
+                new ApiError(
+                    500,
+                    "Failed to save connection request to the database."
+                )
+            );
+        }
     }
 });
 
-const acceptConnectionRequest = asyncHandler(async (req, res) => {
+const acceptConnectionRequest = asyncHandler(async (req, res, next) => {
     const { connectionId } = req.params;
     const userId = req.user._id;
 
@@ -76,18 +89,22 @@ const acceptConnectionRequest = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to accept connection request.");
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to accept connection request"));
+        }
     }
 });
 
 // Delete and Reject Connection request
 // Delete: if sender wants to delete (undo) the request
 // Reject: if receiver wants to reject the request
-const deleteConnectionRequest = asyncHandler(async (req, res) => {
+const deleteConnectionRequest = asyncHandler(async (req, res, next) => {
     const { connectionId } = req.params;
     const userId = req.user._id;
 
-    const connection = await Connection.findOne(connectionId);
+    const connection = await Connection.findById(connectionId);
 
     if (!connection) {
         throw new ApiError(404, "Connection request not found!");
@@ -104,7 +121,7 @@ const deleteConnectionRequest = asyncHandler(async (req, res) => {
     }
 
     try {
-        await connection.findByIdAndDelete(connectionId);
+        await Connection.findByIdAndDelete(connectionId);
 
         res.status(200).json(
             new ApiResponse(
@@ -114,22 +131,32 @@ const deleteConnectionRequest = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to delete/reject connection request!");
+        console.log(error)
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(
+                new ApiError(500, "Failed to delete/reject connection request!")
+            );
+        }
     }
 });
 
-const removeConnection = asyncHandler(async (req, res) => {
+const removeConnection = asyncHandler(async (req, res, next) => {
     const { connectionId } = req.params;
     const userId = req.user._id;
 
-    const connection = await Connection.findOne(connectionId);
+    const connection = await Connection.findById(connectionId);
+    console.log(connectionId, connection);
 
     if (!connection) {
         throw new ApiError(404, "Connection not found!");
     }
 
+    console.log(userId, connection.requester, connection.recipient);
+
     if (
-        connection.requester.toString() !== userId.toString() ||
+        connection.requester.toString() !== userId.toString() &&
         connection.recipient.toString() !== userId.toString()
     ) {
         throw new ApiError(
@@ -139,17 +166,25 @@ const removeConnection = asyncHandler(async (req, res) => {
     }
 
     try {
-        await connection.findByIdAndDelete(connectionId);
+        await Connection.findByIdAndDelete(connectionId);
 
         res.status(200).json(
-            new ApiResponse(200, { connectionId, isRemoved: true }, "Connection removed successfully!")
+            new ApiResponse(
+                200,
+                { connectionId, isRemoved: true },
+                "Connection removed successfully!"
+            )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to remove connection!");
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to remove connection"));
+        }
     }
 });
 
-const getConnections = asyncHandler(async (req, res) => {
+const getConnections = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
 
     try {
@@ -238,18 +273,24 @@ const getConnections = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Something went wrong while fetching connections!"
-        );
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(
+                new ApiError(
+                    500,
+                    "Something went wrong while fetching connections!"
+                )
+            );
+        }
     }
 });
 
-const getPendingConnectionRequests = asyncHandler(async(req, res) => {
+const getPendingConnectionRequests = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
 
     try {
-        const connections = await Connection.aggregate([
+        const requests = await Connection.aggregate([
             {
                 $match: {
                     recipient: new mongoose.Types.ObjectId(userId),
@@ -279,11 +320,11 @@ const getPendingConnectionRequests = asyncHandler(async(req, res) => {
             },
         ]);
 
-        if (!connections.length) {
+        if (!requests.length) {
             res.status(200).json(
                 new ApiResponse(
                     200,
-                    { connections: [] },
+                    { requests: [] },
                     "No pending connection requests found!"
                 )
             );
@@ -292,23 +333,29 @@ const getPendingConnectionRequests = asyncHandler(async(req, res) => {
         res.status(200).json(
             new ApiResponse(
                 200,
-                { connections },
+                { requests },
                 "Pending connections fetched successfully!"
             )
         );
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Something went wrong while fetching connections!"
-        );
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(
+                new ApiError(
+                    500,
+                    "Something went wrong while fetching connections!"
+                )
+            );
+        }
     }
-})
+});
 
-const getInvitationsSentByUser = asyncHandler(async (req, res) => {
+const getInvitationsSentByUser = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
 
     try {
-        const connections = await Connection.aggregate([
+        const invitations = await Connection.aggregate([
             {
                 $match: {
                     requester: new mongoose.Types.ObjectId(userId),
@@ -330,6 +377,7 @@ const getInvitationsSentByUser = asyncHandler(async (req, res) => {
                 $project: {
                     _id: 1,
                     status: 1,
+                    "user._id": "$recipientDetails._id",
                     "user.firstName": "$recipientDetails.firstName",
                     "user.lastName": "$recipientDetails.lastName",
                     "user.email": "$recipientDetails.email",
@@ -338,12 +386,12 @@ const getInvitationsSentByUser = asyncHandler(async (req, res) => {
             },
         ]);
 
-        if (!connections.length) {
+        if (!invitations.length) {
             res.status(200).json(
                 new ApiResponse(
                     200,
-                    { connections: [] },
-                    "No pending connection requests found!"
+                    { invitations: [] },
+                    "No pending connection invitations found!"
                 )
             );
         }
@@ -351,21 +399,31 @@ const getInvitationsSentByUser = asyncHandler(async (req, res) => {
         res.status(200).json(
             new ApiResponse(
                 200,
-                { connections },
-                "Pending connections fetched successfully!"
+                { invitations },
+                "Pending connection invitations fetched successfully!"
             )
         );
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Something went wrong while fetching connections!"
-        );
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(
+                new ApiError(
+                    500,
+                    "Something went wrong while fetching invitations!"
+                )
+            );
+        }
     }
 });
 
-const checkConnectionStatus = asyncHandler(async (req, res) => {
+const checkConnectionStatus = asyncHandler(async (req, res, next) => {
     const currentUserId = req.user._id;
     const { targetUserId } = req.params;
+
+    if(currentUserId.toString() === targetUserId.toString()) {
+        throw new ApiError(400, "Cannot check connection status with yourself!");
+    }
 
     try {
         const connection = await Connection.findOne({
@@ -416,10 +474,14 @@ const checkConnectionStatus = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(
-            500,
-            "Something went wrong while checking connection status!"
-        );
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(
+                500,
+                "Something went wrong while checking connection status!"
+            ));
+        }
     }
 });
 
@@ -540,7 +602,7 @@ const checkConnectionStatus = asyncHandler(async (req, res) => {
 //         );
 //     } catch (error) {
 //         throw new ApiError(500, "Failed to get mutual connections.");
-        
+
 //     }
 // })
 
@@ -672,7 +734,7 @@ const getMutualConnection = asyncHandler(async (req, res) => {
                 .json(
                     new ApiResponse(
                         200,
-                        { connections: [], totalCount: 0 },
+                        { mutualConnections: [], totalCount: 0 },
                         "No mutual connections found!"
                     )
                 );
@@ -682,17 +744,20 @@ const getMutualConnection = asyncHandler(async (req, res) => {
             new ApiResponse(
                 200,
                 {
-                    connections: mutualConnections,
+                    mutualConnections,
                     totalCount: mutualConnections.length,
                 },
                 "Mutual connections fetched successfully!"
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get mutual connections.");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get mutual connections."));
+        }
     }
 });
-
 
 export {
     sendConnectionRequest,
@@ -703,5 +768,5 @@ export {
     getMutualConnection,
     getPendingConnectionRequests,
     getInvitationsSentByUser,
-    checkConnectionStatus
+    checkConnectionStatus,
 };

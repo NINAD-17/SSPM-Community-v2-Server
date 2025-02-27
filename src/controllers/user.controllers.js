@@ -6,30 +6,146 @@ import {
     uploadOnCloudinary,
     deleteFromCloudinary,
 } from "../utils/cloudinary.js";
+import mongoose from "mongoose";
 
-const getUserProfile = asyncHandler(async (req, res) => {
+const getUserProfile = asyncHandler(async (req, res, next) => {
     const { userId } = req.params;
+    const loggedInUserId = req.user?._id;
 
     try {
-        const profile = await User.findById(userId);
+        const profile = await User.aggregate([
+            // Match the requested user
+            {
+                $match: {
+                    _id: new mongoose.Types.ObjectId(userId)
+                }
+            },
 
-        if (!profile) {
+            // Add follow status
+            {
+                $lookup: {
+                    from: "followers",
+                    let: { profileId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$follower", new mongoose.Types.ObjectId(loggedInUserId)] },
+                                        { $eq: ["$following", "$$profileId"] }
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    as: "followStatus"
+                }
+            },
+
+            // Add connection status
+            {
+                $lookup: {
+                    from: "connections",
+                    let: { profileId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $or: [
+                                        // Check if logged in user sent request
+                                        {
+                                            $and: [
+                                                { $eq: ["$requester", new mongoose.Types.ObjectId(loggedInUserId)] },
+                                                { $eq: ["$recipient", "$$profileId"] }
+                                            ]
+                                        },
+                                        // Check if profile user sent request
+                                        {
+                                            $and: [
+                                                { $eq: ["$requester", "$$profileId"] },
+                                                { $eq: ["$recipient", new mongoose.Types.ObjectId(loggedInUserId)] }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    as: "connectionStatus"
+                }
+            },
+
+            // Project final fields based on user.model.js
+            {
+                $project: {
+                    _id: 1,
+                    email: 1,
+                    firstName: 1,
+                    lastName: 1,
+                    avatar: 1,
+                    headline: 1,
+                    about: 1,
+                    socialHandles: 1,
+                    role: 1,
+                    isAlumni: 1,
+                    enrollmentYear: 1,
+                    graduationYear: 1,
+                    branch: 1,
+                    currentlyWorkingAt: 1,
+                    skills: 1,
+                    isFollowing: {
+                        $cond: {
+                            if: { $gt: [{ $size: "$followStatus" }, 0] },
+                            then: true,
+                            else: false
+                        }
+                    },
+                    connectionStatus: {
+                        $cond: {
+                            if: { $gt: [{ $size: "$connectionStatus" }, 0] },
+                            then: {
+                                $let: {
+                                    vars: {
+                                        connection: { $arrayElemAt: ["$connectionStatus", 0] }
+                                    },
+                                    in: {
+                                        status: "$$connection.status",
+                                        // Add who initiated the connection
+                                        initiatedByMe: { 
+                                            $eq: ["$$connection.requester", new mongoose.Types.ObjectId(loggedInUserId)]
+                                        },
+                                        connectionId: "$$connection._id"
+                                    }
+                                }
+                            },
+                            else: null
+                        }
+                    }
+                }
+            }
+        ]);
+
+        if (!profile.length) {
             throw new ApiError(404, "User not found");
         }
 
         return res.status(200).json(
             new ApiResponse(
                 200,
-                { profile }, // data.profile
+                { profile: profile[0] },
                 "User profile retrieved successfully"
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get user profile.");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get user profile"));
+        }
     }
 });
 
-const updateProfile = asyncHandler(async (req, res) => {
+const updateProfile = asyncHandler(async (req, res, next) => {
     try {
         const updates = req.body;
 
@@ -56,11 +172,15 @@ const updateProfile = asyncHandler(async (req, res) => {
                 )
             );
     } catch (error) {
-        throw new ApiError(500, "Error updating profile");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Error updating profile"));
+        }
     }
 });
 
-const updateAvatar = asyncHandler(async (req, res) => {
+const updateAvatar = asyncHandler(async (req, res, next) => {
     try {
         const userId = req.user?._id;
         const avatarLocalPath = req.file?.path;
@@ -115,7 +235,11 @@ const updateAvatar = asyncHandler(async (req, res) => {
                 )
             );
     } catch (error) {
-        throw new ApiError(500, "Error updating avatar");
+        if(error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Error updating avatar"));
+        }
     }
 });
 
