@@ -50,7 +50,7 @@ const toggleFollow = asyncHandler(async (req, res, next) => {
             // successfully unfollowed
             responseDocument = {
                 userId: targetUserId,
-                isFollowed: false
+                isFollowing: false
             }
         } else {
             responseDocument = {
@@ -62,7 +62,7 @@ const toggleFollow = asyncHandler(async (req, res, next) => {
                     avatar: targetUser.avatar,
                     _id: targetUser._id
                 },
-                isFollowed: true
+                isFollowing: true
             }
         }
 

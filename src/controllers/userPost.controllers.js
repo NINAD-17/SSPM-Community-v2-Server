@@ -242,7 +242,7 @@ const updatePost = asyncHandler(async (req, res, next) => {
         console.log("hey");
 
         res.status(200).json(
-            new ApiResponse(200, post, "Post updated successfully!")
+            new ApiResponse(200, {updatedPost: post}, "Post updated successfully!")
         );
     } catch (error) {
         if (error instanceof ApiError) {
@@ -283,6 +283,7 @@ const deletePost = asyncHandler(async (req, res, next) => {
 
 const getUserPost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
+    const loggedInUserId = req.user._id;
 
     try {
         const post = await UserPost.aggregate([
@@ -299,6 +300,35 @@ const getUserPost = asyncHandler(async (req, res) => {
                     as: "userDetails",
                     pipeline: [
                         {
+                            $lookup: {
+                                from: "followers",
+                                let: { postUserId: "$userId" },
+                                pipeline: [
+                                    {
+                                        $match: {
+                                            $expr: {
+                                                $and: [
+                                                    { $eq: ["$follower", new mongoose.Types.ObjectId(loggedInUserId)] },
+                                                    { $eq: ["$following", "$$postUserId"] }
+                                                ]
+                                            }
+                                        },
+                                    },
+                                    {
+                                        $count: "isFollowing"
+                                    }
+                                ],
+                                as: "followStatus"
+                            }
+                        },
+                        {
+                            $addFields: {
+                                isFollowing: {
+                                    $arrayElemAt: ["$followStatus.isFollowing", 0]
+                                }
+                            }
+                        },
+                        {
                             $project: {
                                 _id: 1,
                                 firstName: 1,
@@ -310,14 +340,114 @@ const getUserPost = asyncHandler(async (req, res) => {
                                 isAdmin: 1,
                                 graduationYear: 1,
                                 branch: 1,
+                                isFollowing: {
+                                    $cond: {
+                                        if: {$gt: ["$isFollowing", 0]},
+                                        then: true,
+                                        else: false
+                                    }
+                                }
                             },
                         },
                     ],
                 },
             },
+            // Get likes count
             {
-                $addFields: {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "likesCount",
+                },
+            },
+            // Get comments count
+            {
+                $lookup: {
+                    from: "comments",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $count: "total",
+                        },
+                    ],
+                    as: "commentsCount",
+                },
+            },
+            // Check if current user has liked the post
+            {
+                $lookup: {
+                    from: "likes",
+                    let: { postId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$postId", "$$postId"] },
+                                        { $eq: ["$postType", "UserPost"] },
+                                        { $eq: ["$likedBy", req.user._id] },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                    as: "userLike",
+                },
+            },
+            // Final projection
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    media: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    userId: 1,
                     userDetails: { $arrayElemAt: ["$userDetails", 0] },
+                    likesCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$likesCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    commentsCount: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$commentsCount.total", 0] },
+                            0,
+                        ],
+                    },
+                    isLiked: {
+                        $cond: [
+                            { $gt: [{ $size: "$userLike" }, 0] },
+                            true,
+                            false,
+                        ],
+                    },
                 },
             },
         ]);
@@ -327,9 +457,10 @@ const getUserPost = asyncHandler(async (req, res) => {
         }
 
         res.status(200).json(
-            new ApiResponse(200, { post }, "User post fetched successfully!")
+            new ApiResponse(200, { post: post[0] }, "User post fetched successfully!")
         );
     } catch (error) {
+        console.log(error);
         throw new ApiError(500, "Failed to get user post.");
     }
 });
@@ -349,6 +480,7 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
     const matchStage = {
         userId: new mongoose.Types.ObjectId(userId),
     };
+    let fetchCountInt = parseInt(fetchCount, 10);
 
     // Include the $match stage for lastPostId only if it's provided
     if (lastPostId) {
@@ -537,7 +669,7 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
         });
 
         const totalFetchedPosts = lastPostId
-            ? posts.length + parseInt(fetchCount, 10) * limitInt
+            ? posts.length + fetchCountInt * limitInt
             : posts.length;
 
         const allPostsFetched = totalPosts <= totalFetchedPosts;
@@ -551,6 +683,7 @@ const getUserPosts = asyncHandler(async (req, res, next) => {
                     totalFetchedPosts,
                     lastPostId: posts[posts.length - 1]?._id || null,
                     allPostsFetched,
+                    fetchCount: fetchCountInt
                 },
                 "User posts fetched successfully!"
             )
@@ -578,6 +711,8 @@ const getAllPosts = asyncHandler(async (req, res) => {
 
     const limitInt = parseInt(limit, 10);
     const matchStage = {};
+    let fetchCountInt = parseInt(fetchCount, 10);
+    console.log({fetchCountInt})
 
     // Include the $match stage only if lastPostId is provided
     if (lastPostId) {
@@ -764,7 +899,7 @@ const getAllPosts = asyncHandler(async (req, res) => {
 
         const totalPosts = await UserPost.countDocuments();
         const totalFetchedPosts = lastPostId
-            ? posts.length + parseInt(fetchCount, 10) * limitInt
+            ? posts.length + fetchCountInt * limitInt
             : posts.length;
         const allPostsFetched = totalPosts <= totalFetchedPosts;
 
@@ -777,6 +912,7 @@ const getAllPosts = asyncHandler(async (req, res) => {
                     totalFetchedPosts,
                     lastPostId: posts[posts.length - 1]?._id || null,
                     allPostsFetched,
+                    fetchCount: fetchCountInt
                 },
                 "Posts fetched successfully!"
             )
