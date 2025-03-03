@@ -11,27 +11,23 @@ const groupSchema = new mongoose.Schema(
             type: String,
             required: true
         },
-        category: {
-            type: String,
-            required: true
-        },
+        // category: {
+        //     type: String,
+        //     required: true
+        // },
         skills: [{
             type: String,
             required: true
         }],
-        members: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User"
-        }],
-        admins: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true
-        }],
-        isPrivate: {
-            type: Boolean,
-            default: false
-        },
+        // members: [{
+        //     type: mongoose.Schema.Types.ObjectId,
+        //     ref: "User"
+        // }],
+        // admins: [{
+        //     type: mongoose.Schema.Types.ObjectId,
+        //     ref: "User",
+        //     required: true
+        // }],
         visibility: {
             type: String,
             enum: ["public", "private"],

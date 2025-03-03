@@ -2,6 +2,7 @@ import multer from "multer";
 import fs from "fs";
 
 const getMulterMiddleware = (options = {}) => {
+    console.log(`Multer Config: `, options.allowedTypes, options.fileSizeLimit, options.singleName);
     // Create temp directory if it doesn't exist
     const tempDir = "./public/temp";
     if (!fs.existsSync(tempDir)) {
@@ -11,9 +12,11 @@ const getMulterMiddleware = (options = {}) => {
     // use disk storage
     const storage = multer.diskStorage({
         destination: function (req, file, cb) {
+            console.log("Processing file: ", file)
             cb(null, tempDir);
         },
         filename: function (req, file, cb) {
+            console.log("Creating filename for: ", file);
             const uniqueSuffix =
                 Date.now() + "-" + Math.round(Math.random() * 1e9);
             cb(null, file.fieldname + "-" + uniqueSuffix);
@@ -22,6 +25,7 @@ const getMulterMiddleware = (options = {}) => {
 
     // only allow certain file types
     const fileFilter = (req, file, cb) => {
+        console.log("Checking file type: ", file.mimetype)
         if (!options.allowedTypes) return cb(null, true);
 
         const allowedTypes = options.allowedTypes;

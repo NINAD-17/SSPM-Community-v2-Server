@@ -26,20 +26,19 @@ const uploadPostMediaOptions = {
 };
 
 router
-    .route("/group/:groupId")
-    .get(verifyJWT, getGroupPosts);
-
-router.route("/:postId").get(verifyJWT, getGroupPost);
-
-router
-    .route("/group/:groupId")
+    .route("/group/:groupId/create")
     .post(
         verifyJWT,
         getMulterMiddleware(uploadPostMediaOptions),
         createPostWithMedia
     );
+    
+router.route("/group/:groupId/post/:postId").get(verifyJWT, getGroupPost);
+router.route("/group/:groupId/post/:postId/update").patch(verifyJWT, updateGroupPost);
+router.route("/group/:groupId/post/:postId/delete").delete(verifyJWT, deleteGroupPost);
 
-router.route("/:postId").patch(verifyJWT, updateGroupPost);
-router.route("/:postId").delete(verifyJWT, deleteGroupPost);
+router
+    .route("/group/:groupId/all")
+    .get(verifyJWT, getGroupPosts);
 
 export default router;

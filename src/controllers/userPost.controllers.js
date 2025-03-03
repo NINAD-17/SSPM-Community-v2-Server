@@ -712,7 +712,6 @@ const getAllPosts = asyncHandler(async (req, res) => {
     const limitInt = parseInt(limit, 10);
     const matchStage = {};
     let fetchCountInt = parseInt(fetchCount, 10);
-    console.log({fetchCountInt})
 
     // Include the $match stage only if lastPostId is provided
     if (lastPostId) {

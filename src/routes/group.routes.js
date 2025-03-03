@@ -22,20 +22,21 @@ import getMulterMiddleware from "../middlewares/multer.middleware.js";
 
 const router = express.Router();
 
-// Put the recommendations route BEFORE the :groupId routes to prevent the conflict
-router.get("/recommendations", verifyJWT, getRecommendedGroups);
-
 // Group admin and Platform Admin routes
 router.route("/create").post(verifyJWT, isAdmin, createGroup);
 
 const avatarOptions = {
     allowedTypes: ["image/jpeg", "image/png", "image/jpg"],
     fileSizeLimit: 10 * 1024 * 1024, // 10 MB
-    singleName: "avatar",
+    singleName: "avatar"
 };
 router
     .route("/:groupId/avatar")
-    .patch(verifyJWT, getMulterMiddleware(avatarOptions), uploadAvatarImg);
+    .patch(
+        verifyJWT, 
+        getMulterMiddleware(avatarOptions),
+        uploadAvatarImg
+    );
 
 const coverImgOptions = {
     allowedTypes: ["image/jpeg", "image/png", "image/jpg"],
@@ -65,9 +66,12 @@ router.route("/:groupId/members").get(verifyJWT, getGroupMembers);
 router.route("/:groupId/admins").get(verifyJWT, getGroupAdmins);
 
 // Get all groups
-router.route("/groups").get(verifyJWT, getAllGroups);
+router.route("/").get(verifyJWT, getAllGroups);
 
 // Get all user joined groups
-router.route("/groups/:userId/").get(verifyJWT, getAllUserJoinedGroups);
+router.route("/user/:userId/joined").get(verifyJWT, getAllUserJoinedGroups);
+
+// Put the recommendations route BEFORE the :groupId routes to prevent the conflict
+router.get("/recommendations", verifyJWT, getRecommendedGroups);
 
 export default router;
