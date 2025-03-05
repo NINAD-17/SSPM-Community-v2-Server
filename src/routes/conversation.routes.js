@@ -1,41 +1,44 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import {
-    getConversationDetails,
-    getConversationMessages,
-    getConversations,
-    startConversation,
-    updateGroupDetails,
-} from "../controllers/conversation.controllers.js";
+import { validateConnection } from "../middlewares/connection.middleware.js";
 import { validateAndSanitizeInput } from "../middlewares/validation.middleware.js";
 import {
+    getConversations,
+    getConversationDetails,
+    startConversation,
+    updateGroupDetails
+} from "../controllers/conversation.controllers.js";
+import {
     startConversationSchema,
-    updateGroupDetailsSchema,
+    updateGroupDetailsSchema
 } from "../validators/conversation.validators.js";
 
 const router = Router();
 
-// get conversations and information
-router.route("/all").get(verifyJWT, getConversations);
-router.route("/:conversationId/details").get(verifyJWT, getConversationDetails);
-router
-    .route("/:conversationId/messages")
-    .get(verifyJWT, getConversationMessages);
+// Apply authentication middleware to all routes
+router.use(verifyJWT);
 
-// start conversation
-router
-    .route("/new")
-    .post(
-        verifyJWT,
-        validateAndSanitizeInput(startConversationSchema),
-        startConversation
-    );
-router
-    .route("/:conversationId/update")
-    .patch(
-        verifyJWT,
-        validateAndSanitizeInput(updateGroupDetailsSchema),
-        updateGroupDetails
-    );
+// Get all conversations (chat list)
+router.get("/", getConversations);
+
+// Start new conversation
+router.post("/new",
+    validateConnection,
+    // validateAndSanitizeInput(startConversationSchema),
+    startConversation
+);
+
+// Get conversation details
+router.get("/:conversationId",
+    validateConnection,
+    getConversationDetails
+);
+
+// Update group details
+router.patch("/:conversationId/group",
+    validateConnection,
+    validateAndSanitizeInput(updateGroupDetailsSchema),
+    updateGroupDetails
+);
 
 export default router;

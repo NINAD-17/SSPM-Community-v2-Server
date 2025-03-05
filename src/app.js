@@ -38,6 +38,8 @@ import groupPostRoutes from "./routes/groupPost.routes.js";
 import opportunityRoutes from "./routes/opportunity.routes.js";
 import likeRoutes from "./routes/like.routes.js";
 import commentRoutes from "./routes/comment.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
+import messageRoutes from "./routes/message.routes.js";
 
 // Routes Declaration
 app.use("/api/v2/auth", authRoutes);
@@ -52,6 +54,8 @@ app.use("/api/v2/recommendations", recommendationRoutes);
 app.use("/api/v2/groups", groupRoutes);
 app.use("/api/v2/group-posts", groupPostRoutes);
 app.use("/api/v2/opportunities", opportunityRoutes);
+app.use("/api/v2/conversations", conversationRoutes);
+app.use("/api/v2/messages", messageRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

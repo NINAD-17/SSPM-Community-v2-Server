@@ -1,10 +1,11 @@
-import ApiError from "../utils/apiError";
-import ApiResponse from "../utils/apiResponse";
-import asyncHandler from "../utils/asyncHandler";
+import { ApiError } from "../utils/apiError.js";
+import { ApiResponse } from "../utils/apiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { Conversation } from "../models/conversation.model.js";
 import { Message } from "../models/message.model.js";
+import mongoose from "mongoose";
 
-const getConversations = asyncHandler(async (req, res) => {
+const getConversations = asyncHandler(async (req, res, next) => {
     const userId = req.user._id;
 
     try {
@@ -14,7 +15,9 @@ const getConversations = asyncHandler(async (req, res) => {
                     participants: { $in: [userId] },
                 },
             },
+            // Get last message details
             {
+                // Find last message and sender of that message to show on conversation list
                 $lookup: {
                     from: "messages",
                     localField: "lastMessage",
@@ -27,16 +30,42 @@ const getConversations = asyncHandler(async (req, res) => {
                                 localField: "sender",
                                 foreignField: "_id",
                                 as: "sender",
+                                pipeline: [
+                                    {
+                                        $project: {
+                                            firstName: 1,
+                                            lastName: 1,
+                                            avatar: 1,
+                                        },
+                                    },
+                                ],
                             },
                         },
                     ],
                 },
             },
-            // Sort conversations by updatedAt field in descending order (most recent first)
+            // Get participant details
             {
-                $sort: {
-                    updatedAt: -1, // -1 for descending order, 1 for ascending order
+                $lookup: {
+                    from: "users",
+                    localField: "participants",
+                    foreignField: "_id",
+                    as: "participantDetails",
+                    pipeline: [
+                        {
+                            $project: {
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1,
+                                headline: 1,
+                            },
+                        },
+                    ],
                 },
+            },
+            // Sort by last activity
+            {
+                $sort: { updatedAt: -1 }, // -1 for descending order, 1 for ascending order
             },
             {
                 $unwind: {
@@ -44,16 +73,12 @@ const getConversations = asyncHandler(async (req, res) => {
                     preserveNullAndEmptyArrays: true, // Ensure conversations without messages are included
                 },
             },
+            // Project final fields
             {
                 $project: {
                     _id: 1,
-                    isGroupChat: 1,
+                    conversationType: 1,
                     groupName: 1,
-                    participants: {
-                        firstName: 1,
-                        lastName: 1,
-                        avatar: 1,
-                    },
                     lastMessage: {
                         content: 1,
                         createdAt: 1,
@@ -78,36 +103,47 @@ const getConversations = asyncHandler(async (req, res) => {
                             },
                         },
                     },
+                    participants: {
+                        $map: {
+                            input: "$participantDetails",
+                            as: "participant",
+                            in: {
+                                _id: "$$participant._id",
+                                firstName: "$$participant.firstName",
+                                lastName: "$$participant.lastName",
+                                avatar: "$$participant.avatar",
+                                headline: "$$participant.headline",
+                            },
+                        },
+                    },
                     updatedAt: 1,
                 },
             },
         ]);
 
-        if (!conversations) {
-            res.status(200).json(
-                new ApiResponse(200, [], "No conversations found.")
-            );
-        }
-
-        // format the conversations
+        // Format conversations for LinkedIn-like display
         const formattedConversations = conversations.map((conversation) => {
             let title = "";
-            if (conversation.isGroupChat) {
+            let subtitle = "";
+
+            if (conversation.conversationType === "group") {
                 title = conversation.groupName;
+                subtitle = `${conversation.participants.length} members`;
             } else {
                 const otherParticipant = conversation.participants.find(
-                    (participant) =>
-                        participant._id.toString() !== userId.toString()
+                    (p) => p._id.toString() !== userId.toString()
                 );
                 title = `${otherParticipant.firstName} ${otherParticipant.lastName}`;
+                subtitle = otherParticipant.headline || "Member";
             }
 
             return {
                 _id: conversation._id,
                 title,
-                isGroupChat: conversation.isGroupChat,
-                groupName: conversation.groupName,
+                subtitle,
+                conversationType: conversation.conversationType,
                 lastMessage: conversation.lastMessage,
+                participants: conversation.participants,
                 updatedAt: conversation.updatedAt,
             };
         });
@@ -115,23 +151,24 @@ const getConversations = asyncHandler(async (req, res) => {
         res.status(200).json(
             new ApiResponse(
                 200,
-                formattedConversations,
-                "Conversations retrieved successfully."
+                { conversations: formattedConversations },
+                "Conversations retrieved successfully"
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get conversations!");
+        console.log(error);
+        next(new ApiError(500, "Failed to get conversations"));
     }
 });
 
-const getConversationDetails = asyncHandler(async (req, res) => {
+const getConversationDetails = asyncHandler(async (req, res, next) => {
     const { conversationId } = req.params;
     const userId = req.user._id;
 
     try {
         const conversation = await Conversation.aggregate([
             {
-                $match: conversationId,
+                $match: { _id: new mongoose.Types.ObjectId(conversationId) },
             },
             {
                 $lookup: {
@@ -145,6 +182,9 @@ const getConversationDetails = asyncHandler(async (req, res) => {
                                 firstName: 1,
                                 lastName: 1,
                                 avatar: 1,
+                                headline: 1,
+                                currentlyWorkingAt: 1,
+                                role: 1,
                             },
                         },
                     ],
@@ -170,61 +210,82 @@ const getConversationDetails = asyncHandler(async (req, res) => {
             {
                 $project: {
                     _id: 1,
-                    isGroupChat: 1,
-                    groupName: {
-                        $cond: {
-                            if: "$isGroupChat",
-                            then: "$groupName",
-                            else: "$$REMOVE",
+                    conversationType: 1,
+                    groupName: 1,
+                    groupDescription: 1,
+                    participants: {
+                        $map: {
+                            input: "$participants",
+                            as: "participant",
+                            in: {
+                                _id: "$$participant._id",
+                                firstName: "$$participant.firstName",
+                                lastName: "$$participant.lastName",
+                                avatar: "$$participant.avatar",
+                                headline: "$$participant.headline",
+                                currentlyWorkingAt:
+                                    "$$participant.currentlyWorkingAt",
+                                role: "$$participant.role",
+                            },
                         },
                     },
-                    groupDescription: {
-                        $cond: {
-                            if: "$isGroupChat",
-                            then: "$groupDescription",
-                            else: "$$REMOVE",
-                        },
-                    },
-                    participants: 1,
                     admins: {
                         $cond: {
-                            if: "$isGroupChat",
+                            if: { $eq: ["$conversationType", "group"] },
                             then: "$admins",
                             else: "$$REMOVE",
                         },
                     },
+                    status: 1,
+                    metadata: 1,
+                    updatedAt: 1,
                 },
             },
         ]);
 
         if (!conversation.length) {
-            throw new ApiError(404, "Conversation not found!");
+            throw new ApiError(404, "Conversation not found");
         }
 
-        if (
-            !conversation.participants.some((participant) =>
-                participant._id.equals(userId)
-            )
-        ) {
+        const conversationData = conversation[0];
+
+        // Check if user is a participant
+        if (!conversationData.participants.some((p) => p._id.equals(userId))) {
             throw new ApiError(
                 403,
-                "You are not authorized to access this conversation!"
+                "You are not authorized to access this conversation"
             );
+        }
+
+        if (conversationData.conversationType === "group") {
+            conversationData.title = conversationData.groupName;
+            conversationData.subtitle = `${conversationData.participants.length} members`;
+        } else {
+            const otherParticipant = conversationData.participants.find(
+                (p) => p._id.toString() !== userId.toString()
+            );
+            conversationData.title = `${otherParticipant.firstName} ${otherParticipant.lastName}`;
+            conversationData.subtitle = otherParticipant.headline || "Member";
         }
 
         res.status(200).json(
             new ApiResponse(
                 200,
-                conversation[0],
-                "Conversation details retrieved successfully."
+                { conversation: conversationData },
+                "Conversation details retrieved successfully"
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get conversation!");
+        console.log(error);
+        next(
+            error instanceof ApiError
+                ? error
+                : new ApiError(500, "Failed to get conversation details")
+        );
     }
 });
 
-const getConversationMessages = asyncHandler(async (req, res) => {
+const getConversationMessages = asyncHandler(async (req, res, next) => {
     const { conversationId } = req.params;
     const { cursor, pageSize = 20 } = req.query; // cursor is the last message's timestamp (createdAt). By this we can fetch messages before this time.
     const userId = req.user._id;
@@ -303,54 +364,119 @@ const getConversationMessages = asyncHandler(async (req, res) => {
             )
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to get conversation messages!");
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to get conversation messages!"));
+        }
     }
 });
 
-const startConversation = asyncHandler(async (req, res) => {
-    const { participants, isGroupChat, groupName, groupDescription } = req.body;
+const startConversation = asyncHandler(async (req, res, next) => {
+    const { participants, conversationType, groupName, groupDescription } =
+        req.body;
+    const currentUserId = req.user._id;
 
-    let conversation;
-
-    if (!(participants.length > 1)) {
-        throw new ApiError(
-            400,
-            "At least two participants are required for a chat."
-        );
-    }
-
-    if (isGroupChat) {
-        // create new group conversation
-        conversation = new Conversation({
-            participants,
-            isGroupChat,
-            groupName,
-            groupDescription,
-        });
-    } else {
-        // check if one to one conversation already exists
-        conversation = await Conversation.findOne({
-            participants: { $all: participants, $size: 2 },
-        });
-
-        if (!conversation) {
-            // create new one to one conversation
-            conversation = new Conversation({
-                participants,
-                isGroupChat: false,
-            });
-        }
+    if (!(participants?.length > 0)) {
+        throw new ApiError(400, "At least one participant is required");
     }
 
     try {
+        let conversation;
+
+        if (conversationType === "direct") {
+            // Validate only two participants for direct messages
+            if (participants.length !== 1) {
+                throw new ApiError(
+                    400,
+                    "Direct messages must have exactly one recipient"
+                );
+            }
+
+            const recipientId = participants[0];
+
+            // Check if users are connected
+            const canMessage = await Conversation.canUsersMessage(
+                currentUserId,
+                recipientId
+            );
+            if (!canMessage) {
+                throw new ApiError(
+                    403,
+                    "You can only message users you are connected with"
+                );
+            }
+
+            // Check for existing conversation
+            conversation = await Conversation.findDirectConversation(
+                currentUserId,
+                recipientId
+            );
+
+            if (conversation) {
+                if (conversation.status === "blocked") {
+                    throw new ApiError(
+                        403,
+                        "This conversation has been blocked"
+                    );
+                }
+                return res
+                    .status(200)
+                    .json(
+                        new ApiResponse(
+                            200,
+                            { conversation },
+                            "Existing conversation retrieved"
+                        )
+                    );
+            }
+
+            // Create new conversation
+            conversation = new Conversation({
+                participants: [currentUserId, recipientId],
+                conversationType: "direct",
+                status: "active",
+            });
+        } else if (conversationType === "group") {
+            // Handle group conversation creation
+            if (!groupName) {
+                throw new ApiError(
+                    400,
+                    "Group name is required for group conversations"
+                );
+            }
+
+            conversation = new Conversation({
+                participants: [currentUserId, ...participants],
+                conversationType: "group",
+                groupName,
+                groupDescription,
+                admins: [currentUserId],
+                status: "active",
+            });
+        }
+
         await conversation.save();
+
+        res.status(201).json(
+            new ApiResponse(
+                201,
+                { conversation },
+                "Conversation created successfully"
+            )
+        );
     } catch (error) {
-        throw new ApiError(500, "Failed to start conversation!");
+        console.log(error);
+        if (error instanceof ApiError) {
+            next(error);
+        } else {
+            next(new ApiError(500, "Failed to start conversation"));
+        }
     }
 });
 
 // modify group details and participants and admins
-const updateGroupDetails = asyncHandler(async(req, res) => {
+const updateGroupDetails = asyncHandler(async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user._id;
     const { groupName, groupDescription, participants, admins } = req.body;
@@ -358,39 +484,47 @@ const updateGroupDetails = asyncHandler(async(req, res) => {
     try {
         const conversation = await Conversation.findById(conversationId);
 
-        if(!conversation.isGroupChat) {
+        if (!conversation.isGroupChat) {
             throw new ApiError(400, "This is not a group chat!");
         }
 
-        if(!conversation.admins.includes(userId)) {
+        if (!conversation.admins.includes(userId)) {
             throw new ApiError(403, "You are not an admin of this group!");
         }
 
         // groupName ? conversation.groupName = groupName : conversation.groupName;
         // participants ? conversation.participants = [...conversation.participants, ...participants] : conversation.participants;
-        
+
         // Instead of ternary operator, for good readability used Object.assign()
         Object.assign(conversation, {
             groupName: groupName || conversation.groupName,
             groupDescription: groupDescription || conversation.groupDescription,
-            participants: participants.length ? [...new Set([...conversation.participants, ...participants])] : conversation.participants, // set used to remove duplicates value. It gives {} as output so we used spread operator to put those values in an array
-            admins: admins.length ? [...new Set([...conversation.admins, ...admins])] : conversation.admins
-        })
+            participants: participants.length
+                ? [...new Set([...conversation.participants, ...participants])]
+                : conversation.participants, // set used to remove duplicates value. It gives {} as output so we used spread operator to put those values in an array
+            admins: admins.length
+                ? [...new Set([...conversation.admins, ...admins])]
+                : conversation.admins,
+        });
 
         await conversation.save();
 
         res.status(200).json(
-            new ApiResponse(200, conversation, "Group details updated successfully!")
+            new ApiResponse(
+                200,
+                conversation,
+                "Group details updated successfully!"
+            )
         );
-    } catch(error) {
+    } catch (error) {
         throw new ApiError(500, "Failed to update group details!");
     }
-})
+});
 
 export {
     getConversations,
     getConversationDetails,
     getConversationMessages,
     startConversation,
-    updateGroupDetails
+    updateGroupDetails,
 };

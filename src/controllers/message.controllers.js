@@ -1,127 +1,250 @@
-import ApiError from "../utils/apiError";
-import ApiResponse from "../utils/apiResponse";
-import asyncHandler from "../utils/asyncHandler";
+import {ApiError} from "../utils/apiError.js";
+import {ApiResponse} from "../utils/apiResponse.js";
+import {asyncHandler} from "../utils/asyncHandler.js";
 import { Message } from "../models/message.model.js";
 import { Conversation } from "../models/conversation.model.js";
+import mongoose from "mongoose";
 
-const sendMessage = asyncHandler(async (req, res) => {
+// Get messages of a conversation with pagination
+const getConversationMessages = asyncHandler(async (req, res, next) => {
+    const { conversationId } = req.params;
+    const { cursor, pageSize = 20 } = req.query;
+    const userId = req.user._id;
+
+    try {
+        const conversation = await Conversation.findById(conversationId).select("participants");
+        if (!conversation) {
+            throw new ApiError(404, "Conversation not found!");
+        }
+
+        if (!conversation.participants.includes(userId)) {
+            throw new ApiError(403, "You are not authorized to access this conversation!");
+        }
+
+        const query = {
+            conversation: new mongoose.Types.ObjectId(conversationId),
+            deletedAt: null
+        };
+
+        if (cursor) {
+            query.createdAt = { $lt: new Date(parseInt(cursor)) };
+        }
+
+        const messages = await Message.aggregate([
+            { $match: query },
+            { $sort: { createdAt: -1 } },
+            { $limit: Number(pageSize) },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "sender",
+                    foreignField: "_id",
+                    as: "sender",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "readReceipts.userId",
+                    foreignField: "_id",
+                    as: "readBy",
+                    pipeline: [
+                        {
+                            $project: {
+                                _id: 1,
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            { $unwind: "$sender" }
+        ]);
+
+        // Mark messages as delivered when they are fetched
+        // await Message.updateMany(
+        //     {
+        //         conversation: conversationId,
+        //         sender: { $ne: userId }, // Messages sent by other users
+        //         status: "sent"
+        //     },
+        //     {
+        //         $set: { status: "delivered" }
+        //     }
+        // );
+
+        res.status(200).json(
+            new ApiResponse(200, { messages, cursor: messages[messages.length - 1]?.createdAt }, 
+            "Messages retrieved successfully")
+        );
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(500, "Failed to get messages"));
+    }
+});
+
+// Send a message
+const sendMessage = asyncHandler(async (req, res, next) => {
     const { content } = req.body;
     const { conversationId } = req.params;
     const userId = req.user._id;
 
     try {
         const conversation = await Conversation.findById(conversationId);
-
         if (!conversation) {
-            throw new ApiError(404, "Conversation not found.");
+            throw new ApiError(404, "Conversation not found");
         }
 
         if (!conversation.participants.includes(userId)) {
-            throw new ApiError(
-                403,
-                "You are not a participant in this conversation."
-            );
+            throw new ApiError(403, "You are not authorized to send messages in this conversation");
         }
 
         const message = await Message.create({
             content,
             sender: userId,
             conversation: conversationId,
+            status: "sent"
         });
 
-        // update the lastMessage in conversation
+        // Update conversation's last message and metadata
         conversation.lastMessage = message._id;
+        conversation.metadata.messagesCount += 1;
+        conversation.metadata.lastActivity = new Date();
         await conversation.save();
 
-        res.status(200).json(
-            new ApiResponse(201, message, "Message sent successfully.")
+        // Populate sender details
+        await message.populate("sender", "firstName lastName avatar");
+
+        res.status(201).json(
+            new ApiResponse(201, message, "Message sent successfully")
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to send message.");
+        next(error instanceof ApiError ? error : new ApiError(500, "Failed to send message"));
     }
 });
 
-const deleteMessage = asyncHandler(async (req, res) => {
+// Delete a message (soft delete)
+const deleteMessage = asyncHandler(async (req, res, next) => {
     const { messageId } = req.params;
-    const { conversationId } = req.params;
     const userId = req.user._id;
 
     try {
         const message = await Message.findById(messageId);
-
         if (!message) {
-            throw new ApiError(404, "Message not found.");
+            throw new ApiError(404, "Message not found");
         }
 
-        const conversation = await Conversation.findById(conversationId);
-
-        if (!conversation) {
-            throw new ApiError(404, "Conversation not found.");
+        if (message.sender.toString() !== userId.toString()) {
+            throw new ApiError(403, "You can only delete your own messages");
         }
 
-        const isParticipant = conversation.participants.includes(userId);
-        const isAdmin = conversation.admins.includes(userId);
-
-        if (!isParticipant && !isAdmin) {
-            throw new ApiError(
-                403,
-                "You are not authorized to delete this message."
-            );
+        if(message.deletedFor.includes(userId)) {
+            throw new ApiError(400, "You have already deleted this message");
         }
 
-        const deleteAllowed =
-            isAdmin ||
-            new Date() - message.createdAt <= 7 * 24 * 60 * 60 * 1000; // users can delete message within 7 days only. After that it's not allowed.
-
-        if(message.deletedAt || !deleteAllowed) {
-            throw new ApiError(403, "This message can't be deleted!");
-        }
-
+        // Soft delete the message
+        message.deletedFor.push(userId);
         message.deletedAt = new Date();
-        message.content = "This message was deleted.";
-
+        message.content = "This message was deleted";
         await message.save();
 
         res.status(200).json(
-            new ApiResponse(200, message, "Message deleted successfully.")
+            new ApiResponse(200, message, "Message deleted successfully")
         );
     } catch (error) {
-        throw new ApiError(500, "Failed to delete message.");
+        next(error instanceof ApiError ? error : new ApiError(500, "Failed to delete message"));
     }
 });
 
-const updateMessage = asyncHandler(async(req, res) => {
+// Update a message
+const updateMessage = asyncHandler(async (req, res, next) => {
     const { messageId } = req.params;
-    const { conversationId } = req.params;
-    const userId = req.user._id;
     const { content } = req.body;
+    const userId = req.user._id;
 
     try {
         const message = await Message.findById(messageId);
-
-        if(!message) {
-            throw new ApiError(404, "Message not found.");
+        if (!message) {
+            throw new ApiError(404, "Message not found");
         }
 
-        const conversation = await Conversation.findById(conversationId);
-
-        if(!conversation) {
-            throw new ApiError(404, "Conversation not found.");
-        }
-
-        if(!conversation.participants.includes(userId) || message.sender.toString() !== userId.toString()) {
-            throw new ApiError(403, "You are not authorized to update this message.");
+        if (message.sender.toString() !== userId.toString()) {
+            throw new ApiError(403, "You can only edit your own messages");
         }
 
         message.content = content;
+        message.metadata.edited = true;
+        message.metadata.editedAt = new Date();
         await message.save();
 
         res.status(200).json(
-            new ApiResponse(200, message, "Message updated successfully.")
-        )
-    } catch(error) {
-        throw new ApiError(500, "Failed to update the message");
+            new ApiResponse(200, message, "Message updated successfully")
+        );
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(500, "Failed to update message"));
     }
-})
+});
 
-export { sendMessage, deleteMessage, updateMessage };
+// Mark messages as read
+const markMessagesAsRead = asyncHandler(async (req, res, next) => {
+    const { conversationId } = req.params;
+    const { messageIds } = req.body; // Array of message IDs that are visible to user
+    const userId = req.user._id;
+
+    try {
+        // Verify conversation access
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation || !conversation.participants.includes(userId)) {
+            throw new ApiError(403, "Unauthorized access to conversation");
+        }
+
+        // Mark specific messages as read
+        const result = await Message.updateMany(
+            {
+                _id: { $in: messageIds },
+                conversation: conversationId,
+                sender: { $ne: userId },
+                "readReceipts.userId": { $ne: userId },
+                status: { $in: ["sent", "delivered"] }
+            },
+            {
+                $push: {
+                    readReceipts: {
+                        userId,
+                        readAt: new Date()
+                    }
+                },
+                $set: { status: "read" }
+            }
+        );
+
+        res.status(200).json(
+            new ApiResponse(
+                200, 
+                { modifiedCount: result.modifiedCount }, 
+                "Messages marked as read"
+            )
+        );
+    } catch (error) {
+        next(error instanceof ApiError ? error : new ApiError(500, "Failed to mark messages as read"));
+    }
+});
+
+export {
+    getConversationMessages,
+    sendMessage,
+    deleteMessage,
+    updateMessage,
+    markMessagesAsRead
+};
