@@ -223,6 +223,13 @@ const getConnections = asyncHandler(async (req, res, next) => {
                 $project: {
                     _id: 1,
                     status: 1,
+                    "user._id": {
+                        $cond: {
+                            if: { $eq: ["$requester", userId] },
+                            then: "$recipientDetails._id",
+                            else: "$requesterDetails._id",
+                        },
+                    },
                     "user.firstName": {
                         $cond: {
                             if: { $eq: ["$requester", userId] },

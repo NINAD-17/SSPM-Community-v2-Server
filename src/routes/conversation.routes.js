@@ -12,6 +12,7 @@ import {
     startConversationSchema,
     updateGroupDetailsSchema
 } from "../validators/conversation.validators.js";
+import { getConnections } from "../controllers/connection.controllers.js"
 
 const router = Router();
 
@@ -27,6 +28,9 @@ router.post("/new",
     // validateAndSanitizeInput(startConversationSchema),
     startConversation
 );
+
+// Fetch connected users to start/see the conversation
+router.get("/connection-list", getConnections);
 
 // Get conversation details
 router.get("/:conversationId",

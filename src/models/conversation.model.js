@@ -78,6 +78,8 @@ conversationSchema.statics.canUsersMessage = async function(userId1, userId2) {
             { requester: userId2, recipient: userId1 }
         ]
     });
+    console.log("userId1: ", userId1, " userId2: ", userId2);
+    console.log('connection', connection);
 
     return connection?.status === "accepted";
 };

@@ -21,11 +21,16 @@ const getConversationMessages = asyncHandler(async (req, res, next) => {
             throw new ApiError(403, "You are not authorized to access this conversation!");
         }
 
-        const query = {
+        const baseQuery = {
             conversation: new mongoose.Types.ObjectId(conversationId),
             deletedAt: null
         };
 
+        // Get total message count
+        const totalCount = await Message.countDocuments(baseQuery);
+
+        // Add cursor condition if provided
+        const query = { ...baseQuery };
         if (cursor) {
             query.createdAt = { $lt: new Date(parseInt(cursor)) };
         }
@@ -73,20 +78,29 @@ const getConversationMessages = asyncHandler(async (req, res, next) => {
             { $unwind: "$sender" }
         ]);
 
-        // Mark messages as delivered when they are fetched
-        // await Message.updateMany(
-        //     {
-        //         conversation: conversationId,
-        //         sender: { $ne: userId }, // Messages sent by other users
-        //         status: "sent"
-        //     },
-        //     {
-        //         $set: { status: "delivered" }
-        //     }
-        // );
+        // Calculate remaining messages
+        // total fetched messages
+        const fetchedCount = cursor 
+            ? await Message.countDocuments({
+                ...baseQuery,
+                createdAt: { $gte: new Date(parseInt(cursor)) }
+              })
+            : 0;
+        
+        // remaining messages
+        const remainingCount = totalCount - (fetchedCount + messages.length);
 
         res.status(200).json(
-            new ApiResponse(200, { messages, cursor: messages[messages.length - 1]?.createdAt }, 
+            new ApiResponse(200, {
+                messages,
+                cursor: messages[messages.length - 1]?.createdAt,
+                pagination: {
+                    totalCount,
+                    fetchedCount: fetchedCount + messages.length,
+                    remainingCount,
+                    hasMore: remainingCount > 0
+                }
+            }, 
             "Messages retrieved successfully")
         );
     } catch (error) {
@@ -127,7 +141,7 @@ const sendMessage = asyncHandler(async (req, res, next) => {
         await message.populate("sender", "firstName lastName avatar");
 
         res.status(201).json(
-            new ApiResponse(201, message, "Message sent successfully")
+            new ApiResponse(201, { message }, "Message sent successfully")
         );
     } catch (error) {
         next(error instanceof ApiError ? error : new ApiError(500, "Failed to send message"));
@@ -160,7 +174,7 @@ const deleteMessage = asyncHandler(async (req, res, next) => {
         await message.save();
 
         res.status(200).json(
-            new ApiResponse(200, message, "Message deleted successfully")
+            new ApiResponse(200, {isDeleted: true, message}, "Message deleted successfully")
         );
     } catch (error) {
         next(error instanceof ApiError ? error : new ApiError(500, "Failed to delete message"));
@@ -189,7 +203,7 @@ const updateMessage = asyncHandler(async (req, res, next) => {
         await message.save();
 
         res.status(200).json(
-            new ApiResponse(200, message, "Message updated successfully")
+            new ApiResponse(200, {updatedMessage: message}, "Message updated successfully")
         );
     } catch (error) {
         next(error instanceof ApiError ? error : new ApiError(500, "Failed to update message"));

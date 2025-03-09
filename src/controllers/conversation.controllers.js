@@ -35,7 +35,6 @@ const getConversations = asyncHandler(async (req, res, next) => {
                                         $project: {
                                             firstName: 1,
                                             lastName: 1,
-                                            avatar: 1,
                                         },
                                     },
                                 ],
@@ -128,7 +127,7 @@ const getConversations = asyncHandler(async (req, res, next) => {
 
             if (conversation.conversationType === "group") {
                 title = conversation.groupName;
-                subtitle = `${conversation.participants.length} members`;
+                subtitle = `${conversation.metadata.participantCount} members`;
             } else {
                 const otherParticipant = conversation.participants.find(
                     (p) => p._id.toString() !== userId.toString()
@@ -285,96 +284,8 @@ const getConversationDetails = asyncHandler(async (req, res, next) => {
     }
 });
 
-const getConversationMessages = asyncHandler(async (req, res, next) => {
-    const { conversationId } = req.params;
-    const { cursor, pageSize = 20 } = req.query; // cursor is the last message's timestamp (createdAt). By this we can fetch messages before this time.
-    const userId = req.user._id;
-
-    try {
-        const conversation =
-            await Conversation.findById(conversationId).select("participants");
-        if (!conversation) {
-            throw new ApiError(404, "Conversation not found!");
-        }
-
-        const isParticipant = conversation.participants.some((participant) =>
-            participant.equals(userId)
-        );
-
-        if (!isParticipant) {
-            throw new ApiError(
-                403,
-                "You are not authorized to access this conversation!"
-            );
-        }
-
-        const query = {
-            conversation: new mongoose.Types.ObjectId(conversationId),
-        }; // It's reffering to the conversation that this message belongs to.
-        if (cursor) {
-            query.createdAt = { $lt: new Date(parseInt(cursor)) };
-        }
-
-        const messages = await Message.aggregate([
-            {
-                $match: query,
-            },
-            {
-                $sort: {
-                    createdAt: -1,
-                },
-            },
-            {
-                $limit: Number(pageSize),
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "sender",
-                    foreignField: "_id",
-                    as: "sender",
-                    pipeline: [
-                        {
-                            $project: {
-                                _id: 1,
-                                firstName: 1,
-                                lastName: 1,
-                                avatar: 1,
-                            },
-                        },
-                    ],
-                },
-            },
-            {
-                $unwind: "$sender",
-            },
-        ]);
-
-        if (!messages.length) {
-            res.status(200).json(
-                new ApiResponse(200, [], "No messages found!")
-            );
-        }
-
-        res.status(200).json(
-            new ApiResponse(
-                200,
-                messages,
-                "Conversation messages retrieved successfully."
-            )
-        );
-    } catch (error) {
-        if (error instanceof ApiError) {
-            next(error);
-        } else {
-            next(new ApiError(500, "Failed to get conversation messages!"));
-        }
-    }
-});
-
 const startConversation = asyncHandler(async (req, res, next) => {
-    const { participants, conversationType, groupName, groupDescription } =
-        req.body;
+    const { participants, conversationType, groupName, groupDescription } = req.body;
     const currentUserId = req.user._id;
 
     if (!(participants?.length > 0)) {
@@ -387,63 +298,107 @@ const startConversation = asyncHandler(async (req, res, next) => {
         if (conversationType === "direct") {
             // Validate only two participants for direct messages
             if (participants.length !== 1) {
-                throw new ApiError(
-                    400,
-                    "Direct messages must have exactly one recipient"
-                );
+                throw new ApiError(400, "Direct messages must have exactly one recipient");
             }
 
             const recipientId = participants[0];
 
             // Check if users are connected
-            const canMessage = await Conversation.canUsersMessage(
-                currentUserId,
-                recipientId
-            );
+            const canMessage = await Conversation.canUsersMessage(currentUserId, recipientId);
             if (!canMessage) {
-                throw new ApiError(
-                    403,
-                    "You can only message users you are connected with"
-                );
+                throw new ApiError(403, "You can only message users you are connected with");
             }
 
             // Check for existing conversation
-            conversation = await Conversation.findDirectConversation(
-                currentUserId,
-                recipientId
-            );
+            conversation = await Conversation.findDirectConversation(currentUserId, recipientId);
 
             if (conversation) {
                 if (conversation.status === "blocked") {
-                    throw new ApiError(
-                        403,
-                        "This conversation has been blocked"
-                    );
+                    throw new ApiError(403, "This conversation has been blocked");
                 }
-                return res
-                    .status(200)
-                    .json(
-                        new ApiResponse(
-                            200,
-                            { conversation },
-                            "Existing conversation retrieved"
-                        )
-                    );
+            } else {
+                // Create new conversation
+                conversation = new Conversation({
+                    participants: [currentUserId, recipientId],
+                    conversationType: "direct",
+                    status: "active",
+                });
+                await conversation.save();
             }
 
-            // Create new conversation
-            conversation = new Conversation({
-                participants: [currentUserId, recipientId],
-                conversationType: "direct",
-                status: "active",
-            });
+            // Get formatted conversation data with participant details
+            const formattedConversation = await Conversation.aggregate([
+                {
+                    $match: { _id: conversation._id }
+                },
+                // Get participant details
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "participants",
+                        foreignField: "_id",
+                        as: "participantDetails",
+                        pipeline: [
+                            {
+                                $project: {
+                                    firstName: 1,
+                                    lastName: 1,
+                                    avatar: 1,
+                                    headline: 1,
+                                }
+                            }
+                        ]
+                    }
+                },
+                // Project final fields
+                {
+                    $project: {
+                        _id: 1,
+                        conversationType: 1,
+                        participants: {
+                            $map: {
+                                input: "$participantDetails",
+                                as: "participant",
+                                in: {
+                                    _id: "$$participant._id",
+                                    firstName: "$$participant.firstName",
+                                    lastName: "$$participant.lastName",
+                                    avatar: "$$participant.avatar"
+                                }
+                            }
+                        },
+                        lastMessage: {
+                            sender: {
+                                _id: null,
+                                firstName: null,
+                                lastName: null,
+                                avatar: null
+                            }
+                        },
+                        updatedAt: 1
+                    }
+                }
+            ]);
+
+            // Format the conversation for response
+            const otherParticipant = formattedConversation[0].participants.find(
+                p => p._id.toString() !== currentUserId.toString()
+            );
+
+            const responseData = {
+                ...formattedConversation[0],
+                title: `${otherParticipant.firstName} ${otherParticipant.lastName}`,
+                subtitle: otherParticipant.headline || "Member"
+            };
+
+            return res.status(200).json(
+                new ApiResponse(200, { conversation: responseData }, "Conversation created successfully")
+            );
+
         } else if (conversationType === "group") {
             // Handle group conversation creation
             if (!groupName) {
-                throw new ApiError(
-                    400,
-                    "Group name is required for group conversations"
-                );
+                throw new ApiError(400, "Group name is required for group conversations");
             }
 
             conversation = new Conversation({
@@ -454,17 +409,72 @@ const startConversation = asyncHandler(async (req, res, next) => {
                 admins: [currentUserId],
                 status: "active",
             });
+
+            await conversation.save();
+
+            // Format group conversation response
+            const formattedConversation = await Conversation.aggregate([
+                {
+                    $match: { _id: conversation._id }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "participants",
+                        foreignField: "_id",
+                        as: "participantDetails",
+                        pipeline: [
+                            {
+                                $project: {
+                                    firstName: 1,
+                                    lastName: 1,
+                                    avatar: 1,
+                                    headline: 1,
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        conversationType: 1,
+                        groupName: 1,
+                        participants: {
+                            $map: {
+                                input: "$participantDetails",
+                                as: "participant",
+                                in: {
+                                    _id: "$$participant._id",
+                                    firstName: "$$participant.firstName",
+                                    lastName: "$$participant.lastName",
+                                    avatar: "$$participant.avatar"
+                                }
+                            }
+                        },
+                        lastMessage: {
+                            sender: {
+                                _id: null,
+                                firstName: null,
+                                lastName: null,
+                                avatar: null
+                            }
+                        },
+                        updatedAt: 1
+                    }
+                }
+            ]);
+
+            const responseData = {
+                ...formattedConversation[0],
+                title: groupName,
+                subtitle: `${formattedConversation[0].participants.length} members`
+            };
+
+            return res.status(201).json(
+                new ApiResponse(201, { conversation: responseData }, "Group conversation created successfully")
+            );
         }
-
-        await conversation.save();
-
-        res.status(201).json(
-            new ApiResponse(
-                201,
-                { conversation },
-                "Conversation created successfully"
-            )
-        );
     } catch (error) {
         console.log(error);
         if (error instanceof ApiError) {
@@ -474,6 +484,10 @@ const startConversation = asyncHandler(async (req, res, next) => {
         }
     }
 });
+
+// const startConversationList = asyncHandler(async (req, res, next) => {
+
+// })
 
 // modify group details and participants and admins
 const updateGroupDetails = asyncHandler(async (req, res) => {
@@ -524,7 +538,6 @@ const updateGroupDetails = asyncHandler(async (req, res) => {
 export {
     getConversations,
     getConversationDetails,
-    getConversationMessages,
     startConversation,
     updateGroupDetails,
 };
