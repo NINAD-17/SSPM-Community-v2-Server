@@ -3,6 +3,25 @@ import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
 
+export const decodeAndVerifyToken = async (token) => {
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+
+        // check for access token expiration
+        if (decodedToken.exp * 1000 < Date.now()) {
+            throw new ApiError(401, "Access Token Expired!")
+        }
+
+        const user = await User.findById(decodedToken?._id).select(
+            "-password -refreshToken"
+        );
+
+        if(!user) {
+                throw new ApiError(404, "User not found");
+        }
+
+        return user;
+}
+
 export const verifyJWT = asyncHandler(async (req, _, next) => {
     try {
         const token =
@@ -13,28 +32,7 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
             throw new ApiError(401, "Unauthorized Request!");
         }
 
-        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-
-        // check for access token expiration
-        if (decodedToken.exp * 1000 < Date.now()) {
-            return res
-                .status(401)
-                .json(
-                    new ApiResponse(
-                        401,
-                        { expired: true },
-                        "Access Token Expired!"
-                    )
-                );
-        }
-
-        const user = await User.findById(decodedToken?._id).select(
-            "-password -refreshToken"
-        );
-
-        if (!user) {
-            throw new ApiError(401, "Invalid Access Token");
-        }
+        const user = await decodeAndVerifyToken(token);
 
         req.user = user;
         next();
