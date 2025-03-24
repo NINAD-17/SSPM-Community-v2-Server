@@ -58,8 +58,9 @@ const sendConnectionRequest = asyncHandler(async (req, res, next) => {
 const acceptConnectionRequest = asyncHandler(async (req, res, next) => {
     const { connectionId } = req.params;
     const userId = req.user._id;
+    console.log({connectionId})
 
-    const connection = await Connection.findOne(connectionId);
+    const connection = await Connection.findById(connectionId);
 
     if (!connection) {
         throw new ApiError(404, "Connection request not found!");
@@ -103,6 +104,7 @@ const acceptConnectionRequest = asyncHandler(async (req, res, next) => {
 const deleteConnectionRequest = asyncHandler(async (req, res, next) => {
     const { connectionId } = req.params;
     const userId = req.user._id;
+    console.log({connectionId})
 
     const connection = await Connection.findById(connectionId);
 
@@ -111,7 +113,7 @@ const deleteConnectionRequest = asyncHandler(async (req, res, next) => {
     }
 
     if (
-        connection.requester.toString() !== userId.toString() ||
+        connection.requester.toString() !== userId.toString() &&
         connection.recipient.toString() !== userId.toString()
     ) {
         throw new ApiError(
@@ -307,22 +309,25 @@ const getPendingConnectionRequests = asyncHandler(async (req, res, next) => {
             {
                 $lookup: {
                     from: "users",
-                    localField: "recipient",
+                    localField: "requester",
                     foreignField: "_id",
-                    as: "recipientDetails",
+                    as: "requesterDetails",
                 },
             },
             {
-                $unwind: "$recipientDetails",
+                $unwind: "$requesterDetails",
             },
             {
                 $project: {
                     _id: 1,
                     status: 1,
-                    "user.firstName": "$recipientDetails.firstName",
-                    "user.lastName": "$recipientDetails.lastName",
-                    "user.email": "$recipientDetails.email",
-                    "user.avatar": "$recipientDetails.avatar",
+                    "user.firstName": "$requesterDetails.firstName",
+                    "user.lastName": "$requesterDetails.lastName",
+                    "user.email": "$requesterDetails.email",
+                    "user.avatar": "$requesterDetails.avatar",
+                    "user._id": "$requesterDetails._id",
+                    "user.headline": "$requesterDetails.headline",
+                    "user.currentlyWorkingAt": "$requesterDetails.currentlyWorkingAt"
                 },
             },
         ]);
@@ -331,7 +336,7 @@ const getPendingConnectionRequests = asyncHandler(async (req, res, next) => {
             res.status(200).json(
                 new ApiResponse(
                     200,
-                    { requests: [] },
+                    { pendingRequests: [] },
                     "No pending connection requests found!"
                 )
             );
@@ -340,7 +345,7 @@ const getPendingConnectionRequests = asyncHandler(async (req, res, next) => {
         res.status(200).json(
             new ApiResponse(
                 200,
-                { requests },
+                { pendingRequests: requests },
                 "Pending connections fetched successfully!"
             )
         );

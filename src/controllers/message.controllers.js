@@ -10,7 +10,8 @@ const getConversationMessages = asyncHandler(async (req, res, next) => {
     const { conversationId } = req.params;
     const { cursor, pageSize = 20 } = req.query;
     const userId = req.user._id;
-
+    console.log({ conversationId, cursor, pageSize })
+    
     try {
         const conversation = await Conversation.findById(conversationId).select("participants");
         if (!conversation) {
@@ -32,7 +33,8 @@ const getConversationMessages = asyncHandler(async (req, res, next) => {
         // Add cursor condition if provided
         const query = { ...baseQuery };
         if (cursor) {
-            query.createdAt = { $lt: new Date(parseInt(cursor)) };
+            // Parse the ISO string to Date object
+            query.createdAt = { $lt: new Date(cursor) };
         }
 
         const messages = await Message.aggregate([
@@ -78,22 +80,25 @@ const getConversationMessages = asyncHandler(async (req, res, next) => {
             { $unwind: "$sender" }
         ]);
 
-        // Calculate remaining messages
-        // total fetched messages
+        // Calculate fetched count and remaining count
         const fetchedCount = cursor 
             ? await Message.countDocuments({
                 ...baseQuery,
-                createdAt: { $gte: new Date(parseInt(cursor)) }
+                createdAt: { $gte: new Date(cursor) }
               })
             : 0;
         
-        // remaining messages
         const remainingCount = totalCount - (fetchedCount + messages.length);
+        
+        // Get the cursor for next pagination and return as ISO string
+        const nextCursor = messages.length > 0 
+            ? messages[messages.length - 1].createdAt.getTime()
+            : null;
 
         res.status(200).json(
             new ApiResponse(200, {
                 messages,
-                cursor: messages[messages.length - 1]?.createdAt,
+                cursor: nextCursor,
                 pagination: {
                     totalCount,
                     fetchedCount: fetchedCount + messages.length,

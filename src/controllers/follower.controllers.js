@@ -8,6 +8,7 @@ import mongoose, { trusted } from "mongoose";
 const toggleFollow = asyncHandler(async (req, res, next) => {
     const { targetUserId } = req.params;
     const userId = req.user._id;
+    console.log({targetUserId})
 
     if (targetUserId.toString() === userId.toString()) {
         throw new ApiError(400, "Cannot follow yourself.");
@@ -17,6 +18,7 @@ const toggleFollow = asyncHandler(async (req, res, next) => {
         // check if the target user with targetUserId is exist or not
         const targetUser = await User.findById(targetUserId);
         if (!targetUser) {
+            console.log("hit: ", targetUser);
             throw new ApiError(404, "User not found.");
         }
 
@@ -87,6 +89,7 @@ const toggleFollow = asyncHandler(async (req, res, next) => {
 const removeFollower = asyncHandler(async (req, res, next) => {
     const { targetUserId } = req.params;
     const userId = req.user._id;
+    console.log({targetUserId})
 
     if (targetUserId.toString() === userId.toString()) {
         throw new ApiError(400, "Cannot remove yourself as a follower");
