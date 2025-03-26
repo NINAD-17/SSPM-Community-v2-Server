@@ -122,6 +122,11 @@ const getAllOpportunities = asyncHandler(async (req, res) => {
                 },
             },
             {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
                 $lookup: {
                     from: "users",
                     localField: "postedBy",
@@ -175,6 +180,11 @@ const getOpportunityById = asyncHandler(async (req, res) => {
                     _id: new mongoose.Types.ObjectId(opportunityId),
                     status: "Active",
                 },
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
             },
             {
                 $lookup: {

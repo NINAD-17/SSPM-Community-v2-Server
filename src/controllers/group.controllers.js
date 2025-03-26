@@ -890,10 +890,63 @@ const getGroupAdmins = asyncHandler(async (req, res, next) => {
 
 const getAllGroups = asyncHandler(async (req, res, next) => {
     try {
-        const allGroups = await Group.find();
+        const userId = req.user._id;
+
+        const allGroups = await Group.aggregate([
+            {
+                $lookup: {
+                    from: "memberships",
+                    let: { groupId: "$_id", userId: new mongoose.Types.ObjectId(userId) },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$groupId", "$$groupId"] },
+                                        { $eq: ["$userId", "$$userId"] },
+                                        { $eq: ["$status", "approved"] }
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    as: "userMembership"
+                }
+            },
+            {
+                $lookup: {
+                    from: "memberships",
+                    localField: "_id",
+                    foreignField: "groupId",
+                    as: "memberships",
+                    pipeline: [
+                        {
+                            $match: {
+                                status: "approved"
+                            }
+                        },
+                        {
+                            $count: "total"
+                        }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    isMember: { $gt: [{ $size: "$userMembership" }, 0] },
+                    membersCount: { $ifNull: [{ $arrayElemAt: ["$memberships.total", 0] }, 0] }
+                }
+            },
+            {
+                $project: {
+                    userMembership: 0,
+                    memberships: 0
+                }
+            }
+        ]);
 
         if (allGroups.length === 0) {
-            res.status(200).json(new ApiResponse(200, [], "No groups found!"));
+            return res.status(200).json(new ApiResponse(200, [], "No groups found!"));
         }
 
         res.status(200).json(
@@ -904,6 +957,7 @@ const getAllGroups = asyncHandler(async (req, res, next) => {
             )
         );
     } catch (error) {
+        console.error("Error in getAllGroups:", error);
         if (error instanceof ApiError) {
             next(error);
         } else {
@@ -1013,23 +1067,50 @@ const getRecommendedGroups = asyncHandler(async (req, res) => {
     try {
         const userId = req.user._id;
 
-        // Get user's joined groups
-        const userGroups = await Group.find({ members: userId }).select("_id");
-        const userGroupIds = userGroups.map((g) => g._id);
+        // Get user's joined groups - safer approach to handle memberships
+        // Instead of looking directly at members array which might not exist in newer schema
+        const memberships = await Membership.find({
+            userId,
+            status: "approved"
+        }).select("groupId");
+        
+        const userGroupIds = memberships.map(m => m.groupId);
 
         // Get user's skills and interests
         const user = await User.findById(userId).select("skills interests");
+        
+        const userSkills = user.skills || [];
+        const userInterests = user.interests || [];
 
-        // Find groups user hasn't joined yet
+        // Find groups user hasn't joined yet - using $nin safely
+        const matchStage = {};
+        
+        // Only add $nin condition if we have groups to exclude
+        if (userGroupIds.length > 0) {
+            matchStage._id = { $nin: userGroupIds };
+        }
+        
+        // Only add skills/interests match if user has any
+        if (userSkills.length > 0 || userInterests.length > 0) {
+            const orConditions = [];
+            
+            if (userSkills.length > 0) {
+                orConditions.push({ skills: { $in: userSkills } });
+            }
+            
+            if (userInterests.length > 0) {
+                orConditions.push({ category: { $in: userInterests } });
+            }
+            
+            if (orConditions.length > 0) {
+                matchStage.$or = orConditions;
+            }
+        }
+
+        // Find recommended groups
         const recommendedGroups = await Group.aggregate([
             {
-                $match: {
-                    _id: { $nin: userGroupIds },
-                    $or: [
-                        { skills: { $in: user.skills || [] } },
-                        { category: { $in: user.interests || [] } },
-                    ],
-                },
+                $match: matchStage
             },
             {
                 $addFields: {
@@ -1062,16 +1143,22 @@ const getRecommendedGroups = asyncHandler(async (req, res) => {
         // If not enough recommendations, add popular groups
         if (recommendedGroups.length < 5) {
             const remainingCount = 5 - recommendedGroups.length;
+            
+            const popularMatchStage = {};
+            
+            // Only include the $nin if we have IDs to exclude
+            const idsToExclude = [
+                ...(userGroupIds.length > 0 ? userGroupIds : []),
+                ...(recommendedGroups.length > 0 ? recommendedGroups.map(g => g._id) : [])
+            ];
+            
+            if (idsToExclude.length > 0) {
+                popularMatchStage._id = { $nin: idsToExclude };
+            }
+            
             const popularGroups = await Group.aggregate([
                 {
-                    $match: {
-                        _id: {
-                            $nin: [
-                                ...userGroupIds,
-                                ...recommendedGroups.map((g) => g._id),
-                            ],
-                        },
-                    },
+                    $match: popularMatchStage
                 },
                 {
                     $addFields: {

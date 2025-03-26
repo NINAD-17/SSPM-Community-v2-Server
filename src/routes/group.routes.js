@@ -72,6 +72,6 @@ router.route("/").get(verifyJWT, getAllGroups);
 router.route("/user/:userId/joined").get(verifyJWT, getAllUserJoinedGroups);
 
 // Put the recommendations route BEFORE the :groupId routes to prevent the conflict
-router.get("/recommendations", verifyJWT, getRecommendedGroups);
+router.route("/recommendations").get(verifyJWT, getRecommendedGroups);
 
 export default router;
