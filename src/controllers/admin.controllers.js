@@ -113,6 +113,7 @@ export const getUserActivityStats = asyncHandler(async (req, res) => {
     const stats = {};
     const now = new Date();
     
+    console.log("stats");
     // Calculate the count for each period
     for (const days of periodsInDays) {
         const date = new Date(now);

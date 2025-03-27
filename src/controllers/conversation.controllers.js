@@ -332,18 +332,18 @@ const startConversation = asyncHandler(async (req, res, next) => {
                     $match: { _id: conversation._id }
                 },
                 // Get participant details
-                {
-                    $lookup: {
-                        from: "users",
+            {
+                $lookup: {
+                    from: "users",
                         localField: "participants",
-                        foreignField: "_id",
+                    foreignField: "_id",
                         as: "participantDetails",
-                        pipeline: [
-                            {
-                                $project: {
-                                    firstName: 1,
-                                    lastName: 1,
-                                    avatar: 1,
+                    pipeline: [
+                        {
+                            $project: {
+                                firstName: 1,
+                                lastName: 1,
+                                avatar: 1,
                                     headline: 1,
                                 }
                             }
@@ -508,7 +508,7 @@ const updateGroupDetails = asyncHandler(async (req, res) => {
 
         // groupName ? conversation.groupName = groupName : conversation.groupName;
         // participants ? conversation.participants = [...conversation.participants, ...participants] : conversation.participants;
-
+        
         // Instead of ternary operator, for good readability used Object.assign()
         Object.assign(conversation, {
             groupName: groupName || conversation.groupName,
