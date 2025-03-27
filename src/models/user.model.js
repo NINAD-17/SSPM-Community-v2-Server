@@ -81,6 +81,15 @@ const userSchema = new mongoose.Schema(
         refreshToken: {
             type: String,
         },
+        lastActive: {
+            type: Date,
+            default: Date.now
+        },
+        // Track email notifications to avoid spamming users
+        lastNotificationSent: {
+            type: Date,
+            default: null
+        },
     },
     { timestamps: true }
 );

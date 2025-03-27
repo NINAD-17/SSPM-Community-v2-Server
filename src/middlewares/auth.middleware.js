@@ -36,6 +36,14 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
             throw new ApiError(401, "Invalid Access Token");
         }
 
+        // Update user's lastActive timestamp
+        // We do this as a separate operation to avoid slowing down the main request
+        User.findByIdAndUpdate(
+            user._id,
+            { lastActive: new Date() },
+            { new: true }
+        ).exec();
+
         req.user = user;
         next();
     } catch (error) {

@@ -40,6 +40,7 @@ import likeRoutes from "./routes/like.routes.js";
 import commentRoutes from "./routes/comment.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import messageRoutes from "./routes/message.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 // Routes Declaration
 app.use("/api/v2/auth", authRoutes);
@@ -56,6 +57,7 @@ app.use("/api/v2/group-posts", groupPostRoutes);
 app.use("/api/v2/opportunities", opportunityRoutes);
 app.use("/api/v2/conversations", conversationRoutes);
 app.use("/api/v2/messages", messageRoutes);
+app.use("/api/v2/admin/", adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
