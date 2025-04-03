@@ -79,6 +79,8 @@ const verifyRegistrationOTP = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     res.status(200)
@@ -136,6 +138,8 @@ const completeRegistration = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     const createdUser = await User.findById(user._id).select(
@@ -207,6 +211,8 @@ const verifyLoginOTP = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     const loggedInUser = await User.findById(user._id).select(
@@ -238,6 +244,8 @@ const userLogout = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     res.status(200)
@@ -279,6 +287,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         const options = {
             httpOnly: true,
             secure: true,
+            sameSite: 'None', // Required for cross-origin cookies
+            path: '/', // Makes cookies available across all routes
         };
 
         return res
@@ -353,6 +363,8 @@ const verifyForgotPasswordRequest = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     res.status(200)
@@ -391,6 +403,8 @@ const completeForgotPassword = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     return res
@@ -432,6 +446,8 @@ const setNewPassword = asyncHandler(async (req, res) => {
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: 'None', // Required for cross-origin cookies
+        path: '/', // Makes cookies available across all routes
     };
 
     return res
