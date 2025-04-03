@@ -16,6 +16,11 @@ const commentSchema = new Schema(
             ref: "User",
             required: true,
         },
+        parentCommentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Comment",
+            default: null,
+        },
         isEdited: {
             type: Boolean,
             default: false,

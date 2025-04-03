@@ -41,6 +41,8 @@ import commentRoutes from "./routes/comment.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import messageRoutes from "./routes/message.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import eventRoutes from "./routes/event.routes.js";
+import ticketRoutes from "./routes/ticket.routes.js";
 
 // Routes Declaration
 app.use("/api/v2/auth", authRoutes);
@@ -58,6 +60,8 @@ app.use("/api/v2/opportunities", opportunityRoutes);
 app.use("/api/v2/conversations", conversationRoutes);
 app.use("/api/v2/messages", messageRoutes);
 app.use("/api/v2/admin/", adminRoutes);
+app.use("/api/v2/events", eventRoutes);
+app.use("/api/v2/tickets", ticketRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
