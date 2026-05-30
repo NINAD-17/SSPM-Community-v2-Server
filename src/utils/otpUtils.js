@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 
 // Store OTPs in memory (in production, we'll use Redis or similar)
 const otpStore = new Map();
